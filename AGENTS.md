@@ -23,9 +23,12 @@
 python3 build.py           # 构建 index.html + assets/
 python3 build.py --check   # 只校验：必填字段、nodes 引用存在性、id 重复、layer 合法性
 make build / make check / make serve
+make pack                  # 构建 + 打包成 dist/offer-zhan-sha.zip（拷进内网用）
 ```
 
 构建器只用 `re/json/os/html/sys/datetime`。markdown 解析是自写的子集，支持标题、列表、表格、引用、代码块、行内样式——够用即可，不要为了兼容完整 CommonMark 引入解析库。
+
+`pack.py` 的打包必须用 `zipfile` 而不是 `zip` 命令：Python 会给中文文件名写 UTF-8 标记（flag `0x800`），macOS 的 `zip` 不写，内网 Windows 解压会乱码——项目里 59 个卡片文件名都是中文。
 
 ## 目录契约
 

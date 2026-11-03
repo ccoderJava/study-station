@@ -1,4 +1,4 @@
-.PHONY: build check serve open
+.PHONY: build check serve open pack
 
 # 构建站点（改完 content/ 下的 markdown 执行）
 build:
@@ -16,3 +16,7 @@ serve:
 # 构建后直接用默认浏览器打开
 open: build
 	open index.html
+
+# 打包成可拷进内网的 zip（产物在 dist/）
+pack: build
+	python3 pack.py
