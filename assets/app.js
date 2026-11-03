@@ -348,7 +348,7 @@
   /* ------------------------------------------------------------ 路线图 */
   function viewRoadmap() {
     var h = '<div class="hd"><h1>六层能力路线</h1>' +
-      '<p>从下到上逐层打通：前四层是资格线，后两层是溢价线。虚线框为待补节点。</p></div>';
+      '<p>从下到上逐层打通：前四层是资格线，后两层是溢价线。节点编号里字母代表层（A→S1 … F→S6），数字是层内序号。</p></div>';
     layers.forEach(function (L) {
       var ns = nodes.filter(function (n) { return n.layer === L.id; });
       h += '<div class="layer"><div class="lhead"><span class="lid">' + L.id + '</span>' +
