@@ -805,7 +805,8 @@
   function tocWidth() {
     var v = 0;
     try { v = parseInt(localStorage.getItem(TOCW_KEY), 10) || 0; } catch (e) { v = 0; }
-    return v >= 120 && v <= 360 ? v : TOCW_DEF;
+    if (!v) return TOCW_DEF;
+    return Math.min(360, Math.max(140, v));
   }
 
   function viewCard(id) {
@@ -965,7 +966,7 @@
     var dragging = false, startX = 0, startW = 0;
 
     function apply(w) {
-      w = Math.round(Math.min(360, Math.max(120, w)));
+      w = Math.round(Math.min(360, Math.max(140, w)));
       toc.style.flexBasis = w + 'px';
       toc.style.width = w + 'px';
       return w;
@@ -978,6 +979,7 @@
       startX = e.clientX;
       startW = toc.getBoundingClientRect().width;
       bar.classList.add('drag');
+      toc.classList.add('resizing');
       document.body.classList.add('col-resizing');
       try { bar.setPointerCapture(e.pointerId); } catch (err) {}
     });
@@ -991,6 +993,7 @@
       if (!dragging) return;
       dragging = false;
       bar.classList.remove('drag');
+      toc.classList.remove('resizing');
       document.body.classList.remove('col-resizing');
       try {
         localStorage.setItem(TOCW_KEY, String(Math.round(toc.getBoundingClientRect().width)));

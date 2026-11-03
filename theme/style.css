@@ -205,21 +205,22 @@ body.col-resizing,body.col-resizing *{cursor:col-resize!important;user-select:no
 
 /* 右侧目录 */
 .toc{
-  flex:0 0 160px;width:160px;position:sticky;top:2px;
+  flex:0 0 160px;width:160px;min-width:140px;position:sticky;top:2px;
   max-height:calc(100vh - 100px);overflow-y:auto;overscroll-behavior:contain;
-  padding:2px 0 14px 0;scrollbar-width:thin;
+  padding:2px 0 14px 0;scrollbar-width:thin;border-radius:8px;
+  transition:background .12s;
 }
+.toc.resizing{background:#f7faff;box-shadow:inset -1px 0 0 var(--acc-line)}
 .toc-h{
   font-size:10.5px;letter-spacing:1px;font-weight:600;color:var(--faint);
   padding:0 0 7px 10px;
 }
 .toclink{
-  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
-  width:100%;text-align:left;font-family:inherit;
+  display:block;width:100%;text-align:left;font-family:inherit;
   font-size:12.5px;line-height:1.5;color:var(--dim);cursor:pointer;
   background:none;border:none;border-left:2px solid var(--line);
-  padding:5px 5px 5px 10px;margin:0 0 1px;
-  overflow:hidden;
+  padding:5px 6px 5px 10px;margin:0 0 1px;
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
   transition:color .12s,border-color .12s,background .12s;
 }
 .toclink:hover{color:var(--fg);border-left-color:var(--acc-line);background:#fafbfe}
