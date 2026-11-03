@@ -6,7 +6,7 @@ nodes: [C5, D4]
 primary: C5
 direction: "微服务"
 event: "生产故障"
-project: "招银云创内部 Feign 调用、回放网关"
+project: "某银行内部 Feign 调用、回放网关"
 level: core
 status: draft
 created: 2026-11-03

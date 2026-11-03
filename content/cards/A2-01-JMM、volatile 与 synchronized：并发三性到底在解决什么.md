@@ -6,7 +6,7 @@ nodes: [A2, A3, A1]
 primary: A2
 direction: "Java 并发"
 event: "面试高频"
-project: "招银云创资金安全加固、PayBy 限额计数、shopline 配置热更新"
+project: "某银行资金安全加固、某支付公司限额计数、某跨境电商配置热更新"
 level: core
 status: draft
 created: 2026-11-03
@@ -63,9 +63,9 @@ volatile 之所以「便宜」，就是因为它只加了屏障，不加锁；sy
 
 ## 项目中如何使用
 
-- **招银云创资金安全加固**：限额校验里有 `if (used + amount > limit) reject;` 这种「检查再更新」，早期用 volatile 修饰 `used`，压测时出现超额放行。改成 `AtomicLong` 的 `compareAndSet` 循环（无锁，性能好），跨 JVM 的场景改用 Redis Lua 原子脚本。**教训：volatile 只能解决「看到最新值」，解决不了「看到之后别人也改了」**。
-- **PayBy 限额计数**：单机用 `LongAdder`（比 AtomicLong 高 3~5 倍吞吐），跨机用 Redis 计数，本地只做粗筛（先本地放行 80%，超过再问 Redis），减少 Redis 调用。
-- **shopline 配置热更新**：配置对象用 `volatile` 引用 + 「整体替换」而不是「逐字段修改」——`volatile Config config` 每次 set 一个新对象，读方拿到的永远是一个完整快照，天然避免「改到一半被读到」。**这是 copy-on-write 的简化版，比加锁简单得多**。
+- **某银行资金安全加固**：限额校验里有 `if (used + amount > limit) reject;` 这种「检查再更新」，早期用 volatile 修饰 `used`，压测时出现超额放行。改成 `AtomicLong` 的 `compareAndSet` 循环（无锁，性能好），跨 JVM 的场景改用 Redis Lua 原子脚本。**教训：volatile 只能解决「看到最新值」，解决不了「看到之后别人也改了」**。
+- **某支付公司限额计数**：单机用 `LongAdder`（比 AtomicLong 高 3~5 倍吞吐），跨机用 Redis 计数，本地只做粗筛（先本地放行 80%，超过再问 Redis），减少 Redis 调用。
+- **某跨境电商配置热更新**：配置对象用 `volatile` 引用 + 「整体替换」而不是「逐字段修改」——`volatile Config config` 每次 set 一个新对象，读方拿到的永远是一个完整快照，天然避免「改到一半被读到」。**这是 copy-on-write 的简化版，比加锁简单得多**。
 - **DCL 单例**：SDK 里的加解密器是 DCL 单例，`instance` 必须 `volatile`。代码评审时这条被专门列成检查项——因为它不加 volatile 也能跑通 99% 的测试，只在特定 GC/JIT 时机炸。
 
 ## 常见陷阱

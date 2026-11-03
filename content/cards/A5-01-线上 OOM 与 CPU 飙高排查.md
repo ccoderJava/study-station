@@ -6,7 +6,7 @@ nodes: [A4, A5]
 primary: A5
 direction: "JVM"
 event: "生产故障"
-project: "招银云创探活失败 / 日志队列积压"
+project: "某银行探活失败 / 日志队列积压"
 level: core
 status: draft
 created: 2026-11-03

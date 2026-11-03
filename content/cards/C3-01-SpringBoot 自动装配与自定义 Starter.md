@@ -6,7 +6,7 @@ nodes: [C3, C1]
 primary: C3
 direction: "Spring"
 event: "项目实践"
-project: "招银云创多渠道接入层 / shopline 加解密 SDK 2.0"
+project: "某银行多渠道接入层 / 某跨境电商加解密 SDK 2.0"
 level: core
 status: draft
 created: 2026-11-03
@@ -38,7 +38,7 @@ updated: 2026-11-03
 
 ## 不用会怎么样
 
-- 每个接入方抄一遍配置类：招银云创对接 10 家银行，10 份几乎相同的 HTTP 客户端、签名器、报文转换器配置，改一处要改 10 个工程。
+- 每个接入方抄一遍配置类：某银行对接 10 家银行，10 份几乎相同的 HTTP 客户端、签名器、报文转换器配置，改一处要改 10 个工程。
 - 配置项散落：密钥、超时、地址写在各自的 `application.yml`，命名不规范，运维排查时找不到。
 - 依赖版本漂移：A 工程用 okhttp 3，B 工程用 4，同一个渠道 SDK 行为不一致，故障无法复现。
 - 灰度能力缺失：新老实现切换只能改代码发版，不能靠配置开关回滚。
@@ -55,8 +55,8 @@ updated: 2026-11-03
 
 ## 项目中如何使用
 
-- **shopline 加解密 SDK 2.0（数据合规改造）**：把加解密能力抽成 `crypto-spring-boot-starter`。用 `@ConditionalOnProperty(prefix="crypto", name="version", havingValue="2")` 控制新老算法并存，灰度期间双写双读；密钥由 `CryptoProperties` 从配置中心绑定，`@ConditionalOnMissingBean` 允许业务方注入自定义实现（测试环境用 Mock 加解密器）；`@ConditionalOnClass` 保证老工程没引 BouncyCastle 时不装配国密实现，不会启动失败。
-- **招银云创多渠道接入层（C9→C10 重构）**：把「渠道适配」做成内部 Starter，每个银行渠道一个配置类，靠 `@ConditionalOnProperty(channel.xxx.enabled)` 决定装配哪些渠道；重构时用流量回放验证，回放环境只打开被测渠道的开关，避免真实报文打到生产银行。
+- **某跨境电商加解密 SDK 2.0（数据合规改造）**：把加解密能力抽成 `crypto-spring-boot-starter`。用 `@ConditionalOnProperty(prefix="crypto", name="version", havingValue="2")` 控制新老算法并存，灰度期间双写双读；密钥由 `CryptoProperties` 从配置中心绑定，`@ConditionalOnMissingBean` 允许业务方注入自定义实现（测试环境用 Mock 加解密器）；`@ConditionalOnClass` 保证老工程没引 BouncyCastle 时不装配国密实现，不会启动失败。
+- **某银行多渠道接入层（C9→C10 重构）**：把「渠道适配」做成内部 Starter，每个银行渠道一个配置类，靠 `@ConditionalOnProperty(channel.xxx.enabled)` 决定装配哪些渠道；重构时用流量回放验证，回放环境只打开被测渠道的开关，避免真实报文打到生产银行。
 - 经验：Starter 里**绝不放 `@ComponentScan`**。早期版本扫了 `com.bank.*`，结果把业务工程的同名包一起扫进来，出现了两个 `BankClient` Bean，排查了半天。
 
 ## 常见陷阱

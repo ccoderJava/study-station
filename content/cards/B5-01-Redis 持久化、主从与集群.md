@@ -6,7 +6,7 @@ nodes: [B5, B4]
 primary: B5
 direction: "Redis"
 event: "生产故障"
-project: "招银云创幂等键与路由缓存、shopline 多租户缓存、PayBy 渠道配置推送"
+project: "某银行幂等键与路由缓存、某跨境电商多租户缓存、某支付公司渠道配置推送"
 level: core
 status: draft
 created: 2026-11-03
@@ -67,9 +67,9 @@ Redis 的可靠性由三块拼起来：**持久化**决定单机重启丢多少�
 
 ## 项目中如何使用
 
-- **招银云创幂等键**：`pay:idem:{商户号}:{请求号}`，`SET NX EX 24h`，同时落一张 DB 幂等表做兜底——**Redis 只做第一道闸，DB 唯一索引才是最终保证**，这样即使 Redis 丢数据也不会重复支付。
-- **shopline 多租户缓存**：key 统一 `t{tenantId}:biz:key`，Cluster 下用 hash tag 保证同一租户的相关 key 落同一 slot，批量操作不会跨 slot 报错；租户级缓存整体过期靠 TTL + 主动清理双保险。
-- **PayBy 渠道配置热更新**：配置变更走 pub/sub 广播，各实例收到后重建本地 `ConcurrentHashMap` 副本，Redis 只作为分发通道，不承担读流量。
+- **某银行幂等键**：`pay:idem:{商户号}:{请求号}`，`SET NX EX 24h`，同时落一张 DB 幂等表做兜底——**Redis 只做第一道闸，DB 唯一索引才是最终保证**，这样即使 Redis 丢数据也不会重复支付。
+- **某跨境电商多租户缓存**：key 统一 `t{tenantId}:biz:key`，Cluster 下用 hash tag 保证同一租户的相关 key 落同一 slot，批量操作不会跨 slot 报错；租户级缓存整体过期靠 TTL + 主动清理双保险。
+- **某支付公司渠道配置热更新**：配置变更走 pub/sub 广播，各实例收到后重建本地 `ConcurrentHashMap` 副本，Redis 只作为分发通道，不承担读流量。
 - **两次真实故障**：① 某个大商户的费率 key 变成热 key，单分片 CPU 打到 100%，用了「本地 Caffeine 缓存 + key 加随机后缀打散到 8 个分片」压下去；② 对账结果按天塞进一个 String，涨到 8MB，定时任务 `DEL` 时主线程阻塞约 200ms，改成 Hash 按商户拆 + `UNLINK` 异步删。
 
 ## 常见陷阱

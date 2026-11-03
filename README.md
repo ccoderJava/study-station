@@ -1,4 +1,4 @@
-# pay-review-station
+# Offer 斩杀（pay-review-station）
 
 一个面向 **Java 后端 / 支付清结算方向** 面试复习的离线知识站。
 
@@ -104,7 +104,7 @@ nodes: [C6, D4, E1]
 primary: C6
 direction: "系统设计"
 event: "生产故障"
-project: "招银云创 / PayBy / shopline 中的真实片段"
+project: "某银行 / 某支付公司 / 某跨境电商中的真实片段"
 level: core
 status: draft
 created: 2026-11-03
@@ -147,7 +147,7 @@ updated: 2026-11-03
 直接这样说就行：
 
 > 加一道场景题：渠道日限额被打满，正常交易被拒。
-> 项目是 PayBy 的渠道限额，当时用 Redis 计数 + DB 兜底，出过一个问题……
+> 项目是 某支付公司的渠道限额，当时用 Redis 计数 + DB 兜底，出过一个问题……
 
 说清「题目 + 真实项目片段」就够了，归到哪些知识点由我判断。
 

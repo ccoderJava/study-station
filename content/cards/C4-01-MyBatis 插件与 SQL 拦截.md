@@ -6,7 +6,7 @@ nodes: [C4, B1, C1]
 primary: C4
 direction: "Spring"
 event: "项目实践"
-project: "shopline 数据合规改造 / 招银云创资金安全加固"
+project: "某跨境电商数据合规改造 / 某银行资金安全加固"
 level: core
 status: draft
 created: 2026-11-03
@@ -36,7 +36,7 @@ MyBatis 把「SQL 执行」拆成四段可替换的组件，插件就是给每�
 
 ## 不用会怎么样
 
-- **合规事故**：shopline 改造前，卡号、证件号明文落库，DBA 一条 `select *` 就能导出全量敏感信息；改造要覆盖 200+ 张表、上千个字段，靠人肉改 SQL 必然漏。
+- **合规事故**：某跨境电商改造前，卡号、证件号明文落库，DBA 一条 `select *` 就能导出全量敏感信息；改造要覆盖 200+ 张表、上千个字段，靠人肉改 SQL 必然漏。
 - **脱敏遗漏**：导出、日志、下游接口各写一套脱敏逻辑，新加一个字段就漏一处，等安全扫描发现已经上线。
 - **租户越权**：多租户系统靠每个 mapper 手写 `and tenant_id = ?`，漏写一条就是跨租户数据泄露。
 - **慢 SQL 失控**：没有统一采集，线上慢查询只能等 DBA 告警，定位不到具体 mapper 方法。
@@ -53,8 +53,8 @@ MyBatis 把「SQL 执行」拆成四段可替换的组件，插件就是给每�
 
 ## 项目中如何使用
 
-- **shopline 数据合规改造（加解密 SDK 2.0）**：主路径用 `TypeHandler`——`@TableField(typeHandler = CryptoTypeHandler.class)` 让敏感字段写库加密、读库解密，业务代码不改；插件只做 TypeHandler 覆盖不到的两件事：一是查询条件的等值匹配（`where card_no = ?` 要在 `ParameterHandler` 里先加密再绑定，否则查不到），二是批量插入时的参数预处理。灰度方案是新老算法双写、读取按版本号解密，用配置开关控制。
-- **招银云创资金安全加固**：`ResultSetHandler` 拦截做导出与日志的字段脱敏（户名、账号、证件号保留前 3 后 4），保证「页面能看到、导出看不到全量」；`StatementHandler.prepare` 计时，超过 500ms 的语句带 `MappedStatement.id` 上报监控，定位到具体 mapper 方法而不是只报一条慢日志。
+- **某跨境电商数据合规改造（加解密 SDK 2.0）**：主路径用 `TypeHandler`——`@TableField(typeHandler = CryptoTypeHandler.class)` 让敏感字段写库加密、读库解密，业务代码不改；插件只做 TypeHandler 覆盖不到的两件事：一是查询条件的等值匹配（`where card_no = ?` 要在 `ParameterHandler` 里先加密再绑定，否则查不到），二是批量插入时的参数预处理。灰度方案是新老算法双写、读取按版本号解密，用配置开关控制。
+- **某银行资金安全加固**：`ResultSetHandler` 拦截做导出与日志的字段脱敏（户名、账号、证件号保留前 3 后 4），保证「页面能看到、导出看不到全量」；`StatementHandler.prepare` 计时，超过 500ms 的语句带 `MappedStatement.id` 上报监控，定位到具体 mapper 方法而不是只报一条慢日志。
 - **踩过的坑**：早期把脱敏写在 `Executor.query` 里，返回的是 `List<Map>` 的导出场景拿不到实体注解，改成 `ResultSetHandler` 后统一；另外插件里再执行 SQL 会再次进入代理链导致递归，必须用 `@ConditionalOnProperty` 关闭自身或用独立 `SqlSession` 规避。
 
 ## 常见陷阱
