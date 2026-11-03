@@ -145,6 +145,29 @@ main.wide{padding:30px 26px 120px}
 .graphwrap{border:1px solid var(--line);border-radius:13px;background:#fff;padding:10px;overflow:auto}
 .gtip{font-size:12.5px;color:var(--faint);margin:0 0 10px}
 
+/* ---- 力导向图谱 ---- */
+.gtools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+.gbtn{font:inherit;font-size:12.5px;color:#46505e;background:#fff;border:1px solid var(--line);
+  border-radius:8px;padding:5px 11px;cursor:pointer;transition:all .12s}
+.gbtn:hover{border-color:#b9c9e8;color:#2563eb;background:#f7faff}
+.gstat{margin-left:auto;font-size:12.5px;color:var(--faint)}
+.glegend{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 10px}
+.glg{font:inherit;font-size:12px;color:#46505e;background:#fff;border:1px solid var(--line);
+  border-radius:20px;padding:3px 11px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .12s}
+.glg i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.glg:hover{border-color:#b9c9e8}
+.glg.off{opacity:.4;text-decoration:line-through}
+.gwrap{position:relative;border:1px solid var(--line);border-radius:13px;background:
+  radial-gradient(circle at 50% 45%,#fbfcfe 0%,#fff 62%);overflow:hidden}
+.gwrap svg{display:block;width:100%;height:auto;max-height:86vh;cursor:grab;touch-action:none}
+.gwrap svg.dragging{cursor:grabbing}
+.gn{cursor:pointer}
+.gn:hover circle{stroke-width:2.4}
+.gtipbox{position:absolute;display:none;pointer-events:none;background:rgba(17,24,39,.93);color:#fff;
+  font-size:12px;line-height:1.55;padding:6px 10px;border-radius:8px;max-width:260px;
+  transform:translate(-50%,-100%);box-shadow:0 6px 18px rgba(17,24,39,.18);z-index:5}
+.gtipbox b{font-weight:600}
+
 /* ---------- node detail ---------- */
 .nodehead{border:1px solid var(--line);border-radius:13px;padding:18px 20px;margin-bottom:18px;background:var(--panel)}
 .nodehead h1{font-size:21px;margin:0 0 6px;font-weight:600}
@@ -328,6 +351,10 @@ article a{border-bottom:1px solid var(--acc-line)}
 .msg.bad{color:#b91c1c}
 
 @media(max-width:920px){
+  .gwrap{overflow-x:auto}
+  .gwrap svg{width:820px;max-height:none}
+  .gstat{width:100%;margin-left:0}
+
   aside{display:none}
   main,main.wide{padding:18px 15px 90px;min-width:0}
   header{flex-wrap:wrap;height:auto;padding:9px 14px;gap:8px}

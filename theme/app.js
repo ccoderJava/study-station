@@ -371,95 +371,379 @@
   }
 
   /* ------------------------------------------------------------ 图谱 */
-  var G = { cols: 7, gap: 126, laneH: 138, top: 30, left: 205, w: 1030 };
-  function nodePos() {
-    var pos = {};
-    layers.forEach(function (L, li) {
-      var ns = nodes.filter(function (n) { return n.layer === L.id; });
-      var span = (ns.length - 1) * G.gap;
-      var startX = G.left + (G.cols - 1) * G.gap / 2 - span / 2;
-      ns.forEach(function (n, i) {
-        pos[n.id] = { x: startX + i * G.gap, y: G.top + li * G.laneH + 56 };
+  /* ------------------------------------------------------------ 图谱（力导向） */
+  var LAYER_HUE = {
+    S1: '#2563eb', S2: '#0d9488', S3: '#7c3aed',
+    S4: '#db2777', S5: '#ea580c', S6: '#64748b'
+  };
+  var GF = { rep: 11500, rest: 128, spring: 0.03, anchor: 0.016, center: 0.005, damp: 0.82, maxV: 18, iter: 620 };
+  var gSeed = 20261103;
+
+  function graphModel() {
+    var gnodes = [], byKey = {}, edges = [];
+    nodes.forEach(function (n) {
+      byKey[n.id] = {
+        key: n.id, id: n.id, kind: 'node', name: n.name, layer: n.layer,
+        color: LAYER_HUE[n.layer] || '#64748b', deg: 0, cards: n.cards.length, scs: n.scenarios.length
+      };
+      gnodes.push(byKey[n.id]);
+    });
+    items.forEach(function (it) {
+      if (it.kind !== 'scenario') return;
+      byKey[it.id] = {
+        key: it.id, id: it.id, kind: 'scenario', name: it.title,
+        layer: null, color: '#f59e0b', deg: 0, cards: 0, scs: 0
+      };
+      gnodes.push(byKey[it.id]);
+    });
+    items.forEach(function (it) {
+      if (it.kind !== 'scenario') return;
+      var a = byKey[it.id];
+      if (!a) return;
+      it.nodes.forEach(function (nid) {
+        var b = byKey[nid];
+        if (!b) return;
+        edges.push({ a: a, b: b, sc: it.id });
+        a.deg++; b.deg++;
       });
     });
-    return pos;
+    return { nodes: gnodes, edges: edges, byKey: byKey };
   }
-  function viewGraph() {
-    var pos = nodePos();
-    var H = G.top + layers.length * G.laneH + 16;
-    var svg = ['<svg viewBox="0 0 ' + G.w + ' ' + H + '" width="100%" style="min-width:760px" font-family="-apple-system,PingFang SC,sans-serif">'];
 
-    layers.forEach(function (L, li) {
-      var y = G.top + li * G.laneH;
-      svg.push('<rect x="30" y="' + y + '" width="' + (G.w - 56) + '" height="112" rx="12" fill="#f8f9fb" stroke="#e3e7ee" stroke-width="1"/>');
-      svg.push('<text x="46" y="' + (y + 26) + '" font-size="12" font-weight="600" fill="#2563eb">' + L.id + '</text>');
-      svg.push('<text x="46" y="' + (y + 46) + '" font-size="12.5" fill="#46505e">' + esc(L.name) + '</text>');
-      svg.push('<text x="46" y="' + (y + 64) + '" font-size="11" fill="#9aa4b2">' + layerPct(L.id) + '%</text>');
+  function graphLayout(g) {
+    var W = 1040, H = 740, cx = W / 2, cy = H / 2, R = 252;
+    var anchors = {};
+    layers.forEach(function (L, i) {
+      var a = -Math.PI / 2 + i * 2 * Math.PI / layers.length;
+      anchors[L.id] = { x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R };
+    });
+    var seed = gSeed;
+    function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+    var scTotal = 0, scIdx = 0;
+    g.nodes.forEach(function (n) { if (n.kind === 'scenario') scTotal++; });
+    g.nodes.forEach(function (n) {
+      if (n.kind === 'node' && anchors[n.layer]) {
+        n.x = anchors[n.layer].x + (rnd() - 0.5) * 130;
+        n.y = anchors[n.layer].y + (rnd() - 0.5) * 130;
+      } else {
+        /* 场景题分布在内圈，避免全挤在圆心 */
+        var a2 = -Math.PI / 2 + scIdx * 2 * Math.PI / Math.max(scTotal, 1);
+        n.ax = cx + Math.cos(a2) * 212;
+        n.ay = cy + Math.sin(a2) * 212;
+        n.x = n.ax + (rnd() - 0.5) * 70;
+        n.y = n.ay + (rnd() - 0.5) * 70;
+        scIdx++;
+      }
+      n.vx = 0; n.vy = 0;
+      n.r = n.kind === 'node' ? 12 + Math.min(n.deg * 2, 16) : 19;
     });
 
-    var scenarios = items.filter(function (i) { return i.kind === 'scenario'; });
-    scenarios.forEach(function (s, si) {
-      var pts = s.nodes.filter(function (id) { return pos[id]; }).map(function (id) { return pos[id]; });
-      for (var a = 0; a < pts.length; a++) {
-        for (var b = a + 1; b < pts.length; b++) {
-          var p1 = pts[a], p2 = pts[b];
-          var dx = p2.x - p1.x, dy = p2.y - p1.y;
-          var k = 0.14 + si * 0.03;
-          var mx = (p1.x + p2.x) / 2 - dy * k;
-          var my = (p1.y + p2.y) / 2 + dx * k;
-          svg.push('<path class="gline" data-sc="' + s.id + '" d="M' + p1.x + ',' + p1.y +
-            ' Q' + mx + ',' + my + ' ' + p2.x + ',' + p2.y + '" fill="none" stroke="#e8b96a" stroke-width="1.4" opacity="0.55"/>');
+    var t, i, j, A, B, dx, dy, d2, d, f, ux, uy;
+    for (t = 0; t < GF.iter; t++) {
+      var alpha = 1 - t / GF.iter;
+      for (i = 0; i < g.nodes.length; i++) {
+        A = g.nodes[i];
+        for (j = i + 1; j < g.nodes.length; j++) {
+          B = g.nodes[j];
+          dx = B.x - A.x; dy = B.y - A.y;
+          d2 = dx * dx + dy * dy;
+          if (d2 < 9) { d2 = 9; dx = (j - i) * 0.31 + 0.2; dy = (i + j) * 0.17 + 0.2; }
+          d = Math.sqrt(d2);
+          f = GF.rep / d2 * alpha;
+          ux = dx / d; uy = dy / d;
+          A.vx -= ux * f; A.vy -= uy * f;
+          B.vx += ux * f; B.vy += uy * f;
         }
       }
-    });
+      g.edges.forEach(function (e) {
+        var ex = e.b.x - e.a.x, ey = e.b.y - e.a.y;
+        var ed = Math.sqrt(ex * ex + ey * ey) || 1;
+        var ef = (ed - GF.rest) * GF.spring * alpha;
+        var e1 = ex / ed, e2 = ey / ed;
+        e.a.vx += e1 * ef; e.a.vy += e2 * ef;
+        e.b.vx -= e1 * ef; e.b.vy -= e2 * ef;
+      });
+      g.nodes.forEach(function (n) {
+        if (n.kind === 'node' && anchors[n.layer]) {
+          n.vx += (anchors[n.layer].x - n.x) * GF.anchor * alpha;
+          n.vy += (anchors[n.layer].y - n.y) * GF.anchor * alpha;
+        } else if (n.ax != null) {
+          n.vx += (n.ax - n.x) * 0.012 * alpha;
+          n.vy += (n.ay - n.y) * 0.012 * alpha;
+        } else {
+          n.vx += (cx - n.x) * GF.center * alpha;
+          n.vy += (cy - n.y) * GF.center * alpha;
+        }
+        n.vx *= GF.damp; n.vy *= GF.damp;
+        var sp = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+        if (sp > GF.maxV) { n.vx = n.vx / sp * GF.maxV; n.vy = n.vy / sp * GF.maxV; }
+        n.x += n.vx; n.y += n.vy;
+      });
+    }
 
-    nodes.forEach(function (n) {
-      var p = pos[n.id];
-      var c = covered(n);
-      var cnt = n.cards.length + n.scenarios.length;
-      var r = 17 + Math.min(cnt * 1.6, 8);
-      svg.push('<g class="gnode" data-id="' + n.id + '" style="cursor:pointer">');
-      svg.push('<circle cx="' + p.x + '" cy="' + p.y + '" r="' + r + '" fill="' + (c ? '#e8f0fe' : '#ffffff') +
-        '" stroke="' + (c ? '#7ba7ee' : '#cbd3de') + '" stroke-width="1.2"' + (c ? '' : ' stroke-dasharray="4 3"') + '/>');
-      svg.push('<text x="' + p.x + '" y="' + (p.y + 4) + '" text-anchor="middle" font-size="11.5" font-weight="600" fill="' +
-        (c ? '#123fa8' : '#9aa4b2') + '">' + n.id + '</text>');
-      svg.push('<text x="' + p.x + '" y="' + (p.y + r + 15) + '" text-anchor="middle" font-size="11.5" fill="#46505e">' + esc(n.name) + '</text>');
-      svg.push('</g>');
-    });
+    /* 横纵比归一：横向拉开、纵向压扁，让画面接近容器比例 */
+    var sx = 1.28, sy = 0.70, gx = 0, gy = 0;
+    g.nodes.forEach(function (n) { gx += n.x; gy += n.y; });
+    gx /= g.nodes.length; gy /= g.nodes.length;
+    g.nodes.forEach(function (n) { n.x = gx + (n.x - gx) * sx; n.y = gy + (n.y - gy) * sy; });
 
-    svg.push('</svg>');
+    /* 去重叠：把相互压住的点推开 */
+    var k;
+    for (k = 0; k < 70; k++) {
+      for (i = 0; i < g.nodes.length; i++) {
+        for (j = i + 1; j < g.nodes.length; j++) {
+          A = g.nodes[i]; B = g.nodes[j];
+          var need = (A.r || 10) + (B.r || 10) + 22;
+          dx = B.x - A.x; dy = B.y - A.y;
+          d2 = dx * dx + dy * dy;
+          if (d2 < 0.01) { dx = 0.6; dy = 0.8; d2 = 1; }
+          d = Math.sqrt(d2);
+          if (d < need) {
+            var push = (need - d) / 2;
+            A.x -= dx / d * push; A.y -= dy / d * push;
+            B.x += dx / d * push; B.y += dy / d * push;
+          }
+        }
+      }
+    }
+  }
+
+  function graphBBox(g, pad) {
+    var x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+    g.nodes.forEach(function (n) {
+      x1 = Math.min(x1, n.x - n.r - 76);
+      x2 = Math.max(x2, n.x + n.r + 76);
+      y1 = Math.min(y1, n.y - n.r - 42);
+      y2 = Math.max(y2, n.y + n.r + 42);
+    });
+    return { x: x1 - pad, y: y1 - pad, w: (x2 - x1) + pad * 2, h: (y2 - y1) + pad * 2 };
+  }
+
+  function graphSvg(g, bb) {
+    var out = [];
+    out.push('<svg id="gsvg" viewBox="' + Math.round(bb.x) + ' ' + Math.round(bb.y) + ' ' +
+      Math.round(bb.w) + ' ' + Math.round(bb.h) + '" preserveAspectRatio="xMidYMid meet">');
+    out.push('<g id="gpan">');
+    out.push('<g id="gedges">');
+    g.edges.forEach(function (e) {
+      out.push('<line class="gline" data-sc="' + e.sc + '" data-a="' + e.a.key + '" data-b="' + e.b.key +
+        '" x1="' + e.a.x.toFixed(1) + '" y1="' + e.a.y.toFixed(1) +
+        '" x2="' + e.b.x.toFixed(1) + '" y2="' + e.b.y.toFixed(1) +
+        '" stroke="#d7dde6" stroke-width="1.1"/>');
+    });
+    out.push('</g><g id="gnodes">');
+
+    var mx = 0, my = 0;
+    g.nodes.forEach(function (n) { mx += n.x; my += n.y; });
+    mx /= g.nodes.length; my /= g.nodes.length;
+
+    g.nodes.forEach(function (n) {
+      /* 标签朝圆心外侧放，减少互相压字 */
+      var ox = n.x - mx, oy = n.y - my;
+      var od = Math.sqrt(ox * ox + oy * oy) || 1;
+      var ux = ox / od, uy = oy / od;
+      var anchor = ux > 0.35 ? 'start' : ux < -0.35 ? 'end' : 'middle';
+      var off = (n.r || 9) + 15;
+      var lx = ux * off, ly = uy * off + 4;
+
+      if (n.kind === 'scenario') {
+        out.push('<g class="gn gsc" data-key="' + n.key + '" data-kind="scenario" data-layer=""' +
+          ' transform="translate(' + n.x.toFixed(1) + ',' + n.y.toFixed(1) + ')">' +
+          '<rect x="-18" y="-9.5" width="36" height="19" rx="9.5" fill="#fff7ed" stroke="' + n.color + '" stroke-width="1.6"/>' +
+          '<text y="3.6" text-anchor="middle" font-size="10" font-weight="700" fill="#b45309">' + esc(n.id) + '</text>' +
+          '</g>');
+      } else {
+        out.push('<g class="gn" data-key="' + n.key + '" data-kind="node" data-layer="' + n.layer + '"' +
+          ' transform="translate(' + n.x.toFixed(1) + ',' + n.y.toFixed(1) + ')">' +
+          '<circle r="' + n.r.toFixed(1) + '" fill="' + n.color + '1f" stroke="' + n.color + '" stroke-width="1.6"/>' +
+          '<text y="3.8" text-anchor="middle" font-size="10.5" font-weight="700" fill="' + n.color + '">' + esc(n.id) + '</text>' +
+          '<text x="' + lx.toFixed(1) + '" y="' + ly.toFixed(1) + '" text-anchor="' + anchor +
+          '" font-size="11.5" fill="#46505e">' + esc(n.name) + '</text>' +
+          '</g>');
+      }
+    });
+    out.push('</g></g></svg>');
+    return out.join('');
+  }
+
+  function viewGraph() {
+    var g = graphModel();
+    graphLayout(g);
+    var bb = graphBBox(g, 34);
+    var scenarios = items.filter(function (i) { return i.kind === 'scenario'; });
+    var links = g.edges.length;
+
+    var legend = layers.map(function (L) {
+      return '<button class="glg on" data-layer="' + L.id + '">' +
+        '<i style="background:' + (LAYER_HUE[L.id] || '#64748b') + '"></i>' + esc(L.name) + '</button>';
+    }).join('') +
+      '<button class="glg on" data-layer="__sc" style="cursor:default;border-style:dashed">' +
+      '<i style="background:#f59e0b"></i>场景题</button>';
 
     var h = '<div class="hd"><h1>知识图谱</h1>' +
-      '<p>圆点是知识点，越大关联内容越多；橙色曲线表示同一道场景题串联的多个知识点。</p></div>' +
-      '<div class="graphwrap">' + svg.join('') + '</div>' +
-      '<div style="margin-top:14px;font-size:12.5px;color:#9aa4b2">' +
-      '场景题：' + scenarios.map(function (s) {
-        return '<a href="#/card/' + s.id + '" style="margin-right:12px">' + esc(s.title) + '</a>';
-      }).join('') + '</div>';
+      '<p>圆点是知识点，越大表示被越多内容关联；橙色方块是场景题，把跨层的知识点串在一起。拖动可平移，滚轮缩放，悬停看关联。</p></div>' +
+      '<div class="gtools">' +
+      '<button class="gbtn" id="gfit">适应窗口</button>' +
+      '<button class="gbtn" id="gzin">＋</button>' +
+      '<button class="gbtn" id="gzout">－</button>' +
+      '<button class="gbtn" id="grelayout">重新布局</button>' +
+      '<span class="gstat">' + nodes.length + ' 个知识点 · ' + scenarios.length + ' 道场景题 · ' + links + ' 条关联</span>' +
+      '</div>' +
+      '<div class="glegend">' + legend + '</div>' +
+      '<div class="gwrap" id="gw">' + graphSvg(g, bb) +
+      '<div class="gtipbox" id="gtip"></div></div>';
 
     view.className = 'wide';
     view.innerHTML = h;
     view.scrollTop = 0;
+    bindGraph(g);
+  }
 
-    Array.prototype.forEach.call(view.querySelectorAll('.gnode'), function (g) {
-      g.addEventListener('click', function () { location.hash = '#/node/' + g.dataset.id; });
-      g.addEventListener('mouseenter', function () {
-        var id = g.dataset.id;
-        var rel = new Set([id]);
-        items.forEach(function (it) {
-          if (it.nodes.indexOf(id) > -1) it.nodes.forEach(function (x) { rel.add(x); });
-        });
-        Array.prototype.forEach.call(view.querySelectorAll('.gnode'), function (g2) {
-          g2.style.opacity = rel.has(g2.dataset.id) ? '1' : '0.28';
-        });
-        Array.prototype.forEach.call(view.querySelectorAll('.gline'), function (ln) {
-          var s = itemById[ln.dataset.sc];
-          ln.setAttribute('opacity', s && s.nodes.indexOf(id) > -1 ? '0.95' : '0.12');
-        });
+  function bindGraph(g) {
+    var svg = document.getElementById('gsvg');
+    var pan = document.getElementById('gpan');
+    var tip = document.getElementById('gtip');
+    var wrap = document.getElementById('gw');
+    if (!svg) return;
+    var tf = { x: 0, y: 0, k: 1 };
+    var vb = svg.viewBox.baseVal;
+    function apply() { pan.setAttribute('transform', 'translate(' + tf.x + ',' + tf.y + ') scale(' + tf.k + ')'); }
+    function reset() { tf = { x: 0, y: 0, k: 1 }; apply(); }
+    apply();
+
+    /* 缩放：以鼠标位置为锚点 */
+    function zoomAt(clientX, clientY, factor) {
+      var rect = svg.getBoundingClientRect();
+      var vx = vb.x + (clientX - rect.left) / rect.width * vb.width;
+      var vy = vb.y + (clientY - rect.top) / rect.height * vb.height;
+      var k2 = Math.max(0.45, Math.min(3.6, tf.k * factor));
+      if (k2 === tf.k) return;
+      var r = k2 / tf.k;
+      tf.x = vx - (vx - tf.x) * r;
+      tf.y = vy - (vy - tf.y) * r;
+      tf.k = k2;
+      apply();
+    }
+    svg.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0016));
+    }, { passive: false });
+
+    /* 平移 */
+    var drag = null;
+    svg.addEventListener('pointerdown', function (e) {
+      if (e.target.closest('.gn')) return;
+      drag = { x: e.clientX, y: e.clientY, tx: tf.x, ty: tf.y };
+      svg.classList.add('dragging');
+      svg.setPointerCapture(e.pointerId);
+    });
+    svg.addEventListener('pointermove', function (e) {
+      if (!drag) return;
+      var rect = svg.getBoundingClientRect();
+      var sx = vb.width / rect.width, sy = vb.height / rect.height;
+      tf.x = drag.tx + (e.clientX - drag.x) * sx;
+      tf.y = drag.ty + (e.clientY - drag.y) * sy;
+      apply();
+    });
+    function endDrag(e) {
+      if (!drag) return;
+      drag = null;
+      svg.classList.remove('dragging');
+      try { svg.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+    svg.addEventListener('pointerup', endDrag);
+    svg.addEventListener('pointercancel', endDrag);
+
+    document.getElementById('gfit').addEventListener('click', reset);
+    document.getElementById('gzin').addEventListener('click', function () {
+      var r = svg.getBoundingClientRect();
+      zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1.28);
+    });
+    document.getElementById('gzout').addEventListener('click', function () {
+      var r = svg.getBoundingClientRect();
+      zoomAt(r.left + r.width / 2, r.top + r.height / 2, 0.78);
+    });
+    document.getElementById('grelayout').addEventListener('click', function () {
+      gSeed = Math.floor(Math.random() * 1e8);
+      var g2 = graphModel();
+      graphLayout(g2);
+      var bb2 = graphBBox(g2, 34);
+      var gw = document.getElementById('gw');
+      gw.innerHTML = graphSvg(g2, bb2) + '<div class="gtipbox" id="gtip"></div>';
+      bindGraph(g2);
+    });
+
+    /* 悬停：高亮邻居 */
+    var nodeEls = Array.prototype.slice.call(svg.querySelectorAll('.gn'));
+    var lineEls = Array.prototype.slice.call(svg.querySelectorAll('.gline'));
+    function neighbors(key) {
+      var set = {};
+      set[key] = 1;
+      g.edges.forEach(function (e) {
+        if (e.a.key === key) set[e.b.key] = 1;
+        if (e.b.key === key) set[e.a.key] = 1;
       });
-      g.addEventListener('mouseleave', function () {
-        Array.prototype.forEach.call(view.querySelectorAll('.gnode'), function (g2) { g2.style.opacity = '1'; });
-        Array.prototype.forEach.call(view.querySelectorAll('.gline'), function (ln) { ln.setAttribute('opacity', '0.55'); });
+      return set;
+    }
+    function clearHi() {
+      nodeEls.forEach(function (n) { n.style.opacity = ''; });
+      lineEls.forEach(function (l) { l.setAttribute('stroke', '#d7dde6'); l.setAttribute('stroke-width', '1.1'); l.style.opacity = ''; });
+      tip.style.display = 'none';
+    }
+    nodeEls.forEach(function (el) {
+      el.addEventListener('mouseenter', function (e) {
+        var key = el.getAttribute('data-key');
+        var rel = neighbors(key);
+        nodeEls.forEach(function (n2) {
+          n2.style.opacity = rel[n2.getAttribute('data-key')] ? '1' : '0.14';
+        });
+        lineEls.forEach(function (l) {
+          var on = l.getAttribute('data-a') === key || l.getAttribute('data-b') === key;
+          l.setAttribute('stroke', on ? '#f59e0b' : '#e7ebf1');
+          l.setAttribute('stroke-width', on ? '1.8' : '1');
+          l.style.opacity = on ? '1' : '0.25';
+        });
+        var n = g.byKey[key];
+        if (n) {
+          tip.innerHTML = n.kind === 'scenario'
+            ? '<b>' + esc(n.name) + '</b><br>' + esc(n.id) + ' · 关联 ' + n.deg + ' 个知识点'
+            : '<b>' + esc(n.name) + '</b><br>' + esc(n.id) + ' · 卡片 ' + n.cards + ' 篇 · 场景题 ' + n.scs + ' 道';
+          var r = wrap.getBoundingClientRect();
+          tip.style.display = 'block';
+          tip.style.left = (e.clientX - r.left) + 'px';
+          tip.style.top = (e.clientY - r.top - 14) + 'px';
+        }
+      });
+      el.addEventListener('mousemove', function (e) {
+        var r = wrap.getBoundingClientRect();
+        tip.style.left = (e.clientX - r.left) + 'px';
+        tip.style.top = (e.clientY - r.top - 14) + 'px';
+      });
+      el.addEventListener('mouseleave', clearHi);
+      el.addEventListener('click', function () {
+        var key = el.getAttribute('data-key');
+        var kind = el.getAttribute('data-kind');
+        location.hash = kind === 'scenario' ? '#/card/' + key : '#/node/' + key;
+      });
+    });
+
+    /* 图层筛选（每次点击时重新取 DOM，重新布局后依然有效） */
+    Array.prototype.forEach.call(view.querySelectorAll('.glg'), function (btn) {
+      var lyr = btn.getAttribute('data-layer');
+      if (lyr === '__sc' || btn.dataset.bound) return;
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', function () {
+        var off = btn.classList.toggle('off');
+        var svg2 = document.getElementById('gsvg');
+        if (!svg2) return;
+        Array.prototype.forEach.call(svg2.querySelectorAll('.gn[data-layer="' + lyr + '"]'), function (n2) {
+          n2.style.display = off ? 'none' : '';
+        });
+        Array.prototype.forEach.call(svg2.querySelectorAll('.gline'), function (l) {
+          var a = g.byKey[l.getAttribute('data-a')], b = g.byKey[l.getAttribute('data-b')];
+          var hit = (a && a.layer === lyr) || (b && b.layer === lyr);
+          if (hit) l.style.display = off ? 'none' : '';
+        });
       });
     });
   }
