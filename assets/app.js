@@ -799,6 +799,14 @@
 
   /* ------------------------------------------------------------ 卡片阅读 */
   var tocCleanup = null;
+  var TOCW_KEY = 'review-toc-w-v1';
+  var TOCW_DEF = 160;
+
+  function tocWidth() {
+    var v = 0;
+    try { v = parseInt(localStorage.getItem(TOCW_KEY), 10) || 0; } catch (e) { v = 0; }
+    return v >= 120 && v <= 360 ? v : TOCW_DEF;
+  }
 
   function viewCard(id) {
     var it = itemById[id];
@@ -852,7 +860,10 @@
     h += '</div>';
 
     if (toc.length >= 3) {
-      h += '<nav class="toc" aria-label="本页目录"><div class="toc-h">本页目录</div>' +
+      var tw = tocWidth();
+      h += '<div class="toc-resize" title="拖动调整目录宽度 · 双击复位"></div>';
+      h += '<nav class="toc" style="flex:0 0 ' + tw + 'px;width:' + tw + 'px" aria-label="本页目录">' +
+        '<div class="toc-h">本页目录</div>' +
         toc.map(function (t) {
           return '<button type="button" class="toclink lv' + t.lv + '" data-t="' + t.id + '" title="' +
             esc(t.t) + '">' + esc(t.t) + '</button>';
@@ -864,6 +875,7 @@
     view.innerHTML = h;
     view.scrollTop = 0;
     bindToc();
+    bindTocResize();
 
     Array.prototype.forEach.call(view.querySelectorAll('.pbtn'), function (b) {
       b.addEventListener('click', function () {
@@ -943,6 +955,54 @@
       tocCleanup = null;
     };
     onScroll();
+  }
+
+  /* 拖动分隔条调目录宽度；双击复位。宽度存 localStorage，全站生效 */
+  function bindTocResize() {
+    var bar = view.querySelector('.toc-resize');
+    var toc = view.querySelector('.toc');
+    if (!bar || !toc) return;
+    var dragging = false, startX = 0, startW = 0;
+
+    function apply(w) {
+      w = Math.round(Math.min(360, Math.max(120, w)));
+      toc.style.flexBasis = w + 'px';
+      toc.style.width = w + 'px';
+      return w;
+    }
+
+    bar.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      dragging = true;
+      startX = e.clientX;
+      startW = toc.getBoundingClientRect().width;
+      bar.classList.add('drag');
+      document.body.classList.add('col-resizing');
+      try { bar.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+
+    bar.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      apply(startW - (e.clientX - startX));
+    });
+
+    function end() {
+      if (!dragging) return;
+      dragging = false;
+      bar.classList.remove('drag');
+      document.body.classList.remove('col-resizing');
+      try {
+        localStorage.setItem(TOCW_KEY, String(Math.round(toc.getBoundingClientRect().width)));
+      } catch (err) {}
+    }
+    bar.addEventListener('pointerup', end);
+    bar.addEventListener('pointercancel', end);
+
+    bar.addEventListener('dblclick', function () {
+      apply(TOCW_DEF);
+      try { localStorage.setItem(TOCW_KEY, String(TOCW_DEF)); } catch (err) {}
+    });
   }
 
   /* ------------------------------------------------------------ 全部内容 */

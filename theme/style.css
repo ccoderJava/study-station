@@ -185,12 +185,27 @@ main.wide{padding:30px 26px 120px}
 .emptyhit{color:var(--faint);font-size:13px;padding:12px 0}
 
 /* ---------- reader ---------- */
-.viewcard{display:flex;align-items:flex-start;gap:38px;max-width:1180px}
+.viewcard{display:flex;align-items:flex-start;max-width:1180px}
 .reader{flex:1;min-width:0;max-width:800px}
+
+/* 目录分隔条：可左右拖动调宽，双击复位 */
+.toc-resize{
+  flex:0 0 10px;width:10px;margin:0 5px;
+  align-self:flex-start;position:sticky;top:2px;
+  height:calc(100vh - 110px);max-height:100%;
+  cursor:col-resize;touch-action:none;user-select:none;
+}
+.toc-resize::before{
+  content:'';position:absolute;left:4px;top:0;bottom:0;width:1px;
+  background:var(--line);border-radius:1px;transition:background .12s;
+}
+.toc-resize:hover::before{background:#93b4f0}
+.toc-resize.drag::before{background:var(--acc);width:2px;left:3.5px}
+body.col-resizing,body.col-resizing *{cursor:col-resize!important;user-select:none!important}
 
 /* 右侧目录 */
 .toc{
-  flex:0 0 204px;width:204px;position:sticky;top:2px;
+  flex:0 0 160px;width:160px;position:sticky;top:2px;
   max-height:calc(100vh - 100px);overflow-y:auto;overscroll-behavior:contain;
   padding:2px 0 14px 0;scrollbar-width:thin;
 }
@@ -203,13 +218,13 @@ main.wide{padding:30px 26px 120px}
   width:100%;text-align:left;font-family:inherit;
   font-size:12.5px;line-height:1.5;color:var(--dim);cursor:pointer;
   background:none;border:none;border-left:2px solid var(--line);
-  padding:5px 8px 5px 10px;margin:0 0 1px;
+  padding:5px 5px 5px 10px;margin:0 0 1px;
   overflow:hidden;
   transition:color .12s,border-color .12s,background .12s;
 }
 .toclink:hover{color:var(--fg);border-left-color:var(--acc-line);background:#fafbfe}
 .toclink.on{color:var(--acc);border-left-color:var(--acc);font-weight:600;background:var(--acc-bg)}
-.toclink.lv3{padding-left:22px;font-size:12px;color:#8a95a3}
+.toclink.lv3{padding-left:17px;font-size:12px;color:#8a95a3}
 .toclink.lv3.on{color:var(--acc)}
 article h2,article h3{scroll-margin-top:16px}
 
@@ -380,7 +395,7 @@ article a{border-bottom:1px solid var(--acc-line)}
 .msg.bad{color:#b91c1c}
 
 @media(max-width:1279px){
-  .toc{display:none}
+  .toc,.toc-resize{display:none}
 }
 @media(min-width:1400px){
   .searchbox{transform:translateX(-72px)}
