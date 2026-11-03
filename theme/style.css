@@ -185,7 +185,34 @@ main.wide{padding:30px 26px 120px}
 .emptyhit{color:var(--faint);font-size:13px;padding:12px 0}
 
 /* ---------- reader ---------- */
-.reader{max-width:800px}
+.viewcard{display:flex;align-items:flex-start;gap:38px;max-width:1180px}
+.reader{flex:1;min-width:0;max-width:800px}
+
+/* 右侧目录 */
+.toc{
+  flex:0 0 204px;width:204px;position:sticky;top:2px;
+  max-height:calc(100vh - 100px);overflow-y:auto;overscroll-behavior:contain;
+  padding:2px 0 14px 0;scrollbar-width:thin;
+}
+.toc-h{
+  font-size:10.5px;letter-spacing:1px;font-weight:600;color:var(--faint);
+  padding:0 0 7px 10px;
+}
+.toclink{
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+  width:100%;text-align:left;font-family:inherit;
+  font-size:12.5px;line-height:1.5;color:var(--dim);cursor:pointer;
+  background:none;border:none;border-left:2px solid var(--line);
+  padding:5px 8px 5px 10px;margin:0 0 1px;
+  overflow:hidden;
+  transition:color .12s,border-color .12s,background .12s;
+}
+.toclink:hover{color:var(--fg);border-left-color:var(--acc-line);background:#fafbfe}
+.toclink.on{color:var(--acc);border-left-color:var(--acc);font-weight:600;background:var(--acc-bg)}
+.toclink.lv3{padding-left:22px;font-size:12px;color:#8a95a3}
+.toclink.lv3.on{color:var(--acc)}
+article h2,article h3{scroll-margin-top:16px}
+
 .reader .meta{
   display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-bottom:14px;
   border-bottom:1px solid var(--line);margin-bottom:22px;font-size:12px;color:var(--dim);
@@ -281,6 +308,7 @@ article a{border-bottom:1px solid var(--acc-line)}
 .databtn{
   font-size:12.5px;padding:6px 11px;border-radius:7px;border:1px solid var(--line);
   background:#fff;color:var(--dim);cursor:pointer;font-family:inherit;margin-left:10px;
+  white-space:nowrap;
 }
 .databtn:hover{border-color:var(--acc-line);color:var(--acc);background:var(--acc-bg)}
 
@@ -351,6 +379,9 @@ article a{border-bottom:1px solid var(--acc-line)}
 .msg.ok{color:var(--ok)}
 .msg.bad{color:#b91c1c}
 
+@media(max-width:1279px){
+  .toc{display:none}
+}
 @media(min-width:1400px){
   .searchbox{transform:translateX(-72px)}
 }

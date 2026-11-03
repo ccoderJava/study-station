@@ -172,6 +172,7 @@
     });
   }
   function route() {
+    if (tocCleanup) tocCleanup();
     var p = parts();
     var head = p[0] || '';
     if (head === 'card' && p[1]) { viewCard(decodeURIComponent(p[1])); setTabs(''); }
@@ -797,6 +798,8 @@
   }
 
   /* ------------------------------------------------------------ 卡片阅读 */
+  var tocCleanup = null;
+
   function viewCard(id) {
     var it = itemById[id];
     if (!it) { view.innerHTML = '<p class="emptyhit">内容不存在</p>'; return; }
@@ -804,7 +807,12 @@
     var prev = items[i - 1], next = items[i + 1];
     var st = stOf(id);
 
-    var h = '<div class="reader">';
+    /* 目录只取 h2 / h3；不足 3 条就不显示右栏，避免短文平白多一列 */
+    var toc = (it.toc || []).filter(function (t) { return t.lv === 2 || t.lv === 3; });
+    if (!toc.length) toc = (it.toc || []).filter(function (t) { return t.lv <= 3; });
+
+    var h = '<div class="viewcard">';
+    h += '<div class="reader">';
     h += '<div class="crumb"><a href="#/cards">全部内容</a> / ' + esc(it.direction) +
       ' / <a href="#/node/' + it.primary + '">' + esc((nodeById[it.primary] || {}).name || it.primary) + '</a></div>';
 
@@ -842,9 +850,20 @@
       '</div>';
 
     h += '</div>';
+
+    if (toc.length >= 3) {
+      h += '<nav class="toc" aria-label="本页目录"><div class="toc-h">本页目录</div>' +
+        toc.map(function (t) {
+          return '<button type="button" class="toclink lv' + t.lv + '" data-t="' + t.id + '" title="' +
+            esc(t.t) + '">' + esc(t.t) + '</button>';
+        }).join('') + '</nav>';
+    }
+    h += '</div>';
+
     view.className = '';
     view.innerHTML = h;
     view.scrollTop = 0;
+    bindToc();
 
     Array.prototype.forEach.call(view.querySelectorAll('.pbtn'), function (b) {
       b.addEventListener('click', function () {
@@ -871,6 +890,59 @@
         markSide();
       });
     });
+  }
+
+  /* 右侧目录：点击滚到标题，滚动时高亮当前章节 */
+  function bindToc() {
+    if (tocCleanup) { tocCleanup(); tocCleanup = null; }
+    var links = Array.prototype.slice.call(view.querySelectorAll('.toclink'));
+    if (!links.length) return;
+    var heads = links.map(function (a) { return document.getElementById(a.dataset.t); })
+      .filter(Boolean);
+    if (!heads.length) return;
+
+    function setActive(hid) {
+      links.forEach(function (a) {
+        var on = a.dataset.t === hid;
+        a.classList.toggle('on', on);
+        if (on) a.setAttribute('aria-current', 'true');
+        else a.removeAttribute('aria-current');
+      });
+    }
+    links.forEach(function (a) {
+      a.addEventListener('click', function () {
+        var el = document.getElementById(a.dataset.t);
+        if (!el) return;
+        setActive(a.dataset.t);
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    var ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () {
+        ticking = false;
+        var base = view.getBoundingClientRect().top;
+        var cur = heads[0].id;
+        for (var k = 0; k < heads.length; k++) {
+          if (heads[k].getBoundingClientRect().top - base <= 76) cur = heads[k].id;
+          else break;
+        }
+        /* 滚到底时最后一项永远到不了顶部，兜底选中它 */
+        if (view.scrollTop + view.clientHeight >= view.scrollHeight - 6) {
+          cur = heads[heads.length - 1].id;
+        }
+        setActive(cur);
+      });
+    }
+    view.addEventListener('scroll', onScroll, { passive: true });
+    tocCleanup = function () {
+      view.removeEventListener('scroll', onScroll);
+      tocCleanup = null;
+    };
+    onScroll();
   }
 
   /* ------------------------------------------------------------ 全部内容 */

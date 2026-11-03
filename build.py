@@ -118,9 +118,11 @@ def render_table(rows):
     return "".join(out)
 
 
-def md_to_html(md):
+def md_to_html(md, hid_prefix=None):
+    """返回 (html, toc)。hid_prefix 非空时给标题加 id，并收集目录项。"""
     lines = md.replace("\r\n", "\n").split("\n")
     out, i, n = [], 0, len(lines)
+    toc = []
     while i < n:
         line = lines[i]
         s = line.strip()
@@ -143,7 +145,14 @@ def md_to_html(md):
         m = re.match(r"^(#{1,6})\s+(.*)$", s)
         if m:
             lvl = len(m.group(1))
-            out.append("<h%d>%s</h%d>" % (lvl, inline(m.group(2)), lvl))
+            raw = m.group(2)
+            hid = ""
+            if hid_prefix:
+                hid = ' id="%s%d"' % (hid_prefix, len(toc) + 1)
+                plain = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", raw)
+                plain = re.sub(r"[*`]", "", plain).strip()
+                toc.append({"id": "%s%d" % (hid_prefix, len(toc) + 1), "t": plain, "lv": lvl})
+            out.append("<h%d%s>%s</h%d>" % (lvl, hid, inline(raw), lvl))
             i += 1
             continue
 
@@ -195,7 +204,7 @@ def md_to_html(md):
                     text += " "
                 text += inline(raw)
             out.append("<p>" + text + "</p>")
-    return "\n".join(out)
+    return "\n".join(out), toc
 
 
 def excerpt(md, limit=72):
@@ -269,12 +278,12 @@ def build_data():
         problems.append("重复的 id: %s" % ", ".join(sorted(dup)))
 
     for C in items:
-        C["_html"] = md_to_html(C["_body"])
+        C["_html"], C["_toc"] = md_to_html(C["_body"], "s")
         C["_excerpt"] = excerpt(C["_body"])
         C["level"] = C.get("level", "normal")
         C["status"] = C.get("status", "draft")
     for N in nodes:
-        N["_html"] = md_to_html(N["_body"])
+        N["_html"], _ = md_to_html(N["_body"])
         N["_excerpt"] = excerpt(N["_body"])
 
     for N in nodes:
@@ -295,7 +304,7 @@ def build_data():
                    "project": c.get("project", ""), "level": c["level"],
                    "status": c["status"], "created": c.get("created", ""),
                    "updated": c.get("updated", ""), "html": c["_html"],
-                   "excerpt": c["_excerpt"]} for c in items],
+                   "toc": c["_toc"], "excerpt": c["_excerpt"]} for c in items],
     }
     return data, problems
 
