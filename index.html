@@ -11,6 +11,7 @@
   <div class="brand"><b>复习站</b><span>支付 · 清结算 · Java 后端</span></div>
   <nav class="tabs">
     <a class="tab" href="#/">总览</a>
+    <a class="tab" href="#/review">复习</a>
     <a class="tab" href="#/roadmap">路线图</a>
     <a class="tab" href="#/graph">图谱</a>
     <a class="tab" href="#/cards">全部内容</a>
@@ -19,10 +20,41 @@
     <input id="q" placeholder="搜索知识点、卡片、关键词…" autocomplete="off"/>
     <div id="qres" class="qres"></div>
   </div>
+  <button id="dataBtn" class="databtn" title="导出 / 导入学习进度">数据</button>
 </header>
 <div class="layout">
   <aside id="side"></aside>
   <main id="view"></main>
+</div>
+
+<div id="modal" class="modal-mask">
+  <div class="modal">
+    <div class="modal-hd">
+      <h3>学习数据</h3>
+      <button id="modalClose" class="x" aria-label="关闭">×</button>
+    </div>
+    <div class="modal-bd">
+      <p class="hint">进度只存在这台设备的浏览器里。换机器、清缓存、换浏览器前导出一次。</p>
+      <div id="dataStat" class="mstat"></div>
+
+      <div class="mlabel">导出</div>
+      <textarea id="exportTa" readonly spellcheck="false"></textarea>
+      <div class="btnrow">
+        <button id="copyBtn" class="btn">复制到剪贴板</button>
+        <button id="dlBtn" class="btn">下载 .json</button>
+      </div>
+
+      <div class="mlabel">导入（合并，保留进度更靠前的那条）</div>
+      <textarea id="importTa" spellcheck="false" placeholder="粘贴上面格式的 JSON，或从文件选择"></textarea>
+      <div class="btnrow">
+        <input type="file" id="importFile" accept=".json,application/json" hidden/>
+        <button id="pickBtn" class="btn">选择文件</button>
+        <button id="mergeBtn" class="btn primary">合并导入</button>
+        <button id="clearBtn" class="btn danger">清空进度</button>
+      </div>
+      <div id="dataMsg" class="msg"></div>
+    </div>
+  </div>
 </div>
 <script src="assets/data.js"></script>
 <script src="assets/app.js"></script>

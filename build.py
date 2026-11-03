@@ -320,12 +320,20 @@ def write_site(data):
 
 def main():
     data, problems = build_data()
+    if "--check" in sys.argv:
+        if problems:
+            print("⚠ 内容校验发现 %d 个问题：" % len(problems))
+            for p in problems:
+                print("   -", p)
+            return 1
+        print("校验通过：%d 个层 / %d 个知识点 / %d 篇内容" % (
+            len(data["layers"]), len(data["nodes"]), len(data["items"])))
+        return 0
+
     if problems:
         print("⚠ 内容校验发现 %d 个问题：" % len(problems))
         for p in problems:
             print("   -", p)
-        if "--check" in sys.argv:
-            return 1
 
     size = write_site(data)
     n_nodes = len(data["nodes"])
