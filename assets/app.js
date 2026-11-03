@@ -118,21 +118,35 @@
   }
 
   /* ------------------------------------------------------------ 侧栏 */
+  var FOLD_KEY = 'review-side-fold-v1';
+  var folds = {};
+  try { folds = JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') || {}; } catch (e) { folds = {}; }
+
   function renderSide() {
     var g = groupBy(items, 'direction');
     var h = '';
     orderedDirs(g).forEach(function (dir) {
       var list = g[dir];
-      h += '<div class="sgroup">' + esc(dir) + ' <span style="color:#c3cad4;font-weight:400">' +
-        list.length + '</span></div>';
+      h += '<div class="sgwrap' + (folds[dir] ? ' closed' : '') + '" data-dir="' + esc(dir) + '">' +
+        '<div class="sgroup" title="点击折叠/展开">' + esc(dir) +
+        ' <span class="cnt">' + list.length + '</span><span class="caret">▾</span></div>';
       list.forEach(function (it) {
         var st = stOf(it.id);
         h += '<a class="slink" href="#/card/' + it.id + '" data-id="' + it.id + '">' +
           '<span class="dot ' + (st === 'todo' ? '' : st) + '"></span>' +
           '<span class="nm">' + esc(it.title) + '</span></a>';
       });
+      h += '</div>';
     });
     side.innerHTML = h;
+    Array.prototype.forEach.call(side.querySelectorAll('.sgroup'), function (gd) {
+      gd.addEventListener('click', function () {
+        var wrap = gd.parentNode;
+        var closed = wrap.classList.toggle('closed');
+        folds[wrap.dataset.dir] = closed;
+        try { localStorage.setItem(FOLD_KEY, JSON.stringify(folds)); } catch (e) {}
+      });
+    });
     markSide();
   }
   function markSide() {
@@ -463,7 +477,9 @@
       n.id + '</span>' + esc(n.name) + '</h1>' +
       '<div style="font-size:12.5px;color:#6b7684">' + esc(L.role) + ' · ' + esc(L.desc) + '</div>';
     if (n.keywords && n.keywords.length) {
-      h += '<div class="kw">' + n.keywords.map(function (k) { return '<span>' + esc(k) + '</span>'; }).join('') + '</div>';
+      h += '<div class="kw">' + n.keywords.map(function (k) {
+        return '<span class="kwt" data-kw="' + esc(k) + '" title="点击搜索「' + esc(k) + '」相关内容">' + esc(k) + '</span>';
+      }).join('') + '</div>';
     }
     h += '</div>';
 
@@ -642,6 +658,14 @@
   });
   qres.addEventListener('click', function (e) {
     if (e.target.closest('.qitem')) { qres.classList.remove('on'); q.value = ''; }
+  });
+  /* 点击节点标签 → 用该关键词搜索 */
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest ? e.target.closest('.kwt') : null;
+    if (!t) return;
+    q.value = t.dataset.kw || '';
+    doSearch(q.value);
+    q.focus();
   });
 
   /* ------------------------------------------------------------ 数据导入导出 */
