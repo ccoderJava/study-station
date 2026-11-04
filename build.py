@@ -237,20 +237,42 @@ def inline_svg(src):
     return ""
 
 
+def is_item_continuation(raw):
+    """这一行是不是上一个列表项的续行（缩进了，但不是新的块）。"""
+    if not raw.strip() or not re.match(r"^\s{2,}", raw):
+        return False
+    t = raw.strip()
+    if re.match(r"^([-*+]|\d+[.)])\s", t):        # 嵌套列表
+        return False
+    if t.startswith(("```", "|", ">", "#")):       # 代码 / 表格 / 引用 / 标题
+        return False
+    if re.match(r"^(-{3,}|\*{3,}|_{3,})$", t):     # 分隔线
+        return False
+    return True
+
+
 def render_items(items):
-    """items: [(indent, marker, text)] → 支持嵌套的 ul/ol"""
+    """items: [(indent, marker, text)] → 支持嵌套的 ul/ol
+
+    有序列表会带上 start：列表项之间夹了空行时会被切成多个 <ol>，
+    不带 start 每条都会从 1 开始编号。
+    text 里的换行是「条目续行」，渲染成 <br/>，不另起段落。
+    """
     res, stack = [], []
     for ind, marker, text in items:
-        tag = "ol" if re.match(r"^\d", marker) else "ul"
+        num = re.match(r"^(\d+)", marker)
+        tag = "ol" if num else "ul"
+        open_tag = '<ol start="%s">' % num.group(1) if num else "<ul>"
         while stack and ind < stack[-1][0]:
             res.append("</%s>" % stack.pop()[1])
         if not stack or ind > stack[-1][0]:
-            res.append("<%s>" % tag)
+            res.append(open_tag)
             stack.append((ind, tag))
         elif stack[-1][1] != tag:
-            res.append("</%s><%s>" % (stack.pop()[1], tag))
+            res.append("</%s>%s" % (stack.pop()[1], open_tag))
             stack.append((ind, tag))
-        res.append("<li>%s</li>" % inline(text))
+        body = "<br/>".join(inline(x) for x in text.split("\n"))
+        res.append("<li>%s</li>" % body)
     while stack:
         res.append("</%s>" % stack.pop()[1])
     return "".join(res)
@@ -349,10 +371,19 @@ def md_to_html(md, hid_prefix=None):
 
         if re.match(r"^\s*([-*+]|\d+[.)])\s+", line):
             items = []
-            while i < n and re.match(r"^\s*([-*+]|\d+[.)])\s+", lines[i]):
+            while i < n:
                 mm = re.match(r"^(\s*)([-*+]|\d+[.)])\s+(.*)$", lines[i])
-                items.append((len(mm.group(1)), mm.group(2), mm.group(3)))
-                i += 1
+                if mm:
+                    items.append([len(mm.group(1)), mm.group(2), mm.group(3)])
+                    i += 1
+                    continue
+                # 紧跟的缩进续行并进上一项：中文技术文里「条目 + 说明」是最常见的写法，
+                # 不合并的话说明会掉成独立段落，和条目脱开。
+                if items and is_item_continuation(lines[i]):
+                    items[-1][2] += "\n" + lines[i].strip()
+                    i += 1
+                    continue
+                break
             out.append(render_items(items))
             continue
 

@@ -28,7 +28,7 @@ make pack                  # 构建 + 打包成 dist/offer-zhan-sha.zip（拷进
 
 构建器只用 `re/json/os/html/sys/datetime`。markdown 解析是自写的子集，支持标题、列表、表格、引用、代码块、行内样式——够用即可，不要为了兼容完整 CommonMark 引入解析库。
 
-`pack.py` 的打包必须用 `zipfile` 而不是 `zip` 命令：Python 会给中文文件名写 UTF-8 标记（flag `0x800`），macOS 的 `zip` 不写，内网 Windows 解压会乱码——项目里 59 个卡片文件名都是中文。
+`pack.py` 的打包必须用 `zipfile` 而不是 `zip` 命令：Python 会给中文文件名写 UTF-8 标记（flag `0x800`），macOS 的 `zip` 不写，内网 Windows 解压会乱码——项目里 66 个内容文件名都是中文。
 
 ## 目录契约
 
@@ -117,7 +117,7 @@ public void foo() {}
 ## 当前进度与下一步
 
 ```
-知识点 33 个，覆盖 33（100%）｜卡片 45 篇｜场景题 20 道
+知识点 33 个，覆盖 33（100%）｜卡片 46 篇｜场景题 20 道
 ```
 
 覆盖率已满，且每个节点都有专题卡片。短板从「有没有写」转到「讲不讲得出来」：全部卡片 `status: draft`，`## 我的口述记录` 仍空白。

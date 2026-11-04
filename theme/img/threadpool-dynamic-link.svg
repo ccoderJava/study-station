@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 452" width="100%" role="img">
+<title>动态线程池的刷新链路：配置表、定时刷新器、线程池实例与生效边界</title>
+<desc>配置存在数据库两张表里：一张放当前值，一张放变更审计。每个应用实例启动时全量加载并建池，运行期每 5 秒按 version 增量拉取，校验后逐项调用 setter。core 和 max 调大立刻补线程，调小不会立刻回收，队列容量无法通过 setter 修改，必须换成自定义的可变容量队列。</desc>
+<defs>
+  <marker id="tp2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#9db4d4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  <marker id="tp2r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#d08d85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+<g font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',Arial,sans-serif">
+
+  <text x="40" y="30" font-size="13.5" fill="#6b7684">配置在库里，实例各自轮询：改一行 SQL，秒级生效，不用发版</text>
+
+  <!-- 左：DB -->
+  <text x="40" y="62" font-size="12" fill="#8593a3">数据库</text>
+  <g>
+    <rect x="40" y="72" width="212" height="94" rx="9" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1.2"/>
+    <text x="54" y="94" font-size="12.5" fill="#16324f">t_dynamic_thread_pool</text>
+    <text x="54" y="114" font-size="11.5" fill="#63707f">pool_key / core / max</text>
+    <text x="54" y="131" font-size="11.5" fill="#63707f">queue_capacity / keep_alive</text>
+    <text x="54" y="148" font-size="11.5" fill="#63707f">version（单调递增）</text>
+  </g>
+  <g>
+    <rect x="40" y="180" width="212" height="74" rx="9" fill="#fbfcfe" stroke="#e3e7ee" stroke-width="1"/>
+    <text x="54" y="202" font-size="12.5" fill="#46505e">t_dynamic_pool_log</text>
+    <text x="54" y="222" font-size="11.5" fill="#6b7684">改前值 / 改后值</text>
+    <text x="54" y="239" font-size="11.5" fill="#6b7684">操作人 / 时间（审计）</text>
+  </g>
+  <text x="40" y="276" font-size="11.5" fill="#8593a3">写一行 = 一次变更，可回滚</text>
+
+  <path d="M256 119L296 119" fill="none" stroke="#9db4d4" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#tp2)"/>
+  <text x="276" y="110" font-size="10.5" fill="#9aa4b2" text-anchor="middle">SQL</text>
+
+  <!-- 中：刷新器 -->
+  <text x="300" y="62" font-size="12" fill="#8593a3">每个应用实例</text>
+  <g>
+    <rect x="300" y="72" width="268" height="182" rx="9" fill="#e3eefc" stroke="#9dbcf0" stroke-width="1.2"/>
+    <text x="316" y="94" font-size="13" fill="#12385f">PoolConfigRefresher</text>
+    <text x="316" y="118" font-size="11.8" fill="#3d5f86">① 启动：全量加载 → 建池</text>
+    <text x="316" y="140" font-size="11.8" fill="#3d5f86">② 运行：每 5s 查 version &gt; local</text>
+    <text x="316" y="162" font-size="11.8" fill="#3d5f86">③ 校验：core ≤ max，上下限硬拦</text>
+    <text x="316" y="184" font-size="11.8" fill="#3d5f86">④ 逐项 setter → 更新 local version</text>
+    <text x="316" y="206" font-size="11.8" fill="#3d5f86">⑤ 打日志 + 上报变更事件</text>
+    <text x="316" y="234" font-size="11.5" fill="#5f7fa8">DB 不可用 → 沿用本地缓存，不拒绝服务</text>
+  </g>
+
+  <path d="M572 119L612 119" fill="none" stroke="#9db4d4" stroke-width="1.5" marker-end="url(#tp2)"/>
+  <text x="592" y="110" font-size="10.5" fill="#9aa4b2" text-anchor="middle">setter</text>
+
+  <!-- 右：线程池 -->
+  <text x="616" y="62" font-size="12" fill="#8593a3">内存里真正干活的</text>
+  <g>
+    <rect x="616" y="72" width="244" height="182" rx="9" fill="#f1f8f3" stroke="#cfe6d8" stroke-width="1.2"/>
+    <text x="632" y="94" font-size="13" fill="#2f6b46">ThreadPoolExecutor</text>
+    <text x="632" y="118" font-size="11.8" fill="#4d7d63">✓ corePoolSize</text>
+    <text x="632" y="140" font-size="11.8" fill="#4d7d63">✓ maximumPoolSize</text>
+    <text x="632" y="162" font-size="11.8" fill="#4d7d63">✓ keepAliveTime</text>
+    <text x="632" y="184" font-size="11.8" fill="#4d7d63">✓ RejectedExecutionHandler</text>
+    <text x="632" y="214" font-size="11.8" fill="#a1706a">✕ 队列容量（无 setter）</text>
+    <text x="632" y="234" font-size="11.5" fill="#b08b85">要改容量 → 自定义可变容量队列</text>
+  </g>
+
+  <path d="M800 258L800 296L444 296L444 258" fill="none" stroke="#7fae93" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#tp2)"/>
+  <text x="622" y="312" font-size="11" fill="#6f9182">回读实际值 / 拒绝数上报，和配置比对发现没生效</text>
+
+  <line x1="40" y1="336" x2="860" y2="336" stroke="#e3e7ee" stroke-width="1" stroke-dasharray="4 4"/>
+
+  <text x="40" y="360" font-size="12.5" fill="#6b7684">改完之后「什么时候生效」，取决于是哪个参数：</text>
+
+  <g>
+    <rect x="40" y="372" width="262" height="62" rx="8" fill="#f1f8f3" stroke="#cfe6d8" stroke-width="1"/>
+    <text x="54" y="392" font-size="12.5" fill="#2f6b46">core / max 调大：立刻补线程</text>
+    <text x="54" y="412" font-size="11.5" fill="#6f9182">setCorePoolSize 会 addWorker 补齐差值</text>
+  </g>
+  <g>
+    <rect x="318" y="372" width="262" height="62" rx="8" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="332" y="392" font-size="12.5" fill="#16324f">调小：只影响后续判断</text>
+    <text x="332" y="412" font-size="11.5" fill="#63707f">已起的线程要等 keepAlive 才退</text>
+  </g>
+  <g>
+    <rect x="596" y="372" width="264" height="62" rx="8" fill="#fdf1f0" stroke="#f0c8c4" stroke-width="1"/>
+    <text x="610" y="392" font-size="12.5" fill="#8a3a30">队列容量：只影响新任务</text>
+    <text x="610" y="412" font-size="11.5" fill="#a1706a">已经积压的任务不会消失</text>
+  </g>
+
+</g>
+</svg>
