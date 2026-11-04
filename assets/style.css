@@ -61,6 +61,21 @@ aside{
 main.wide{padding:30px 26px 120px}
 
 /* ---------- sidebar ---------- */
+/* 一键折叠/展开全部：贴顶常驻，不随分组滚动 */
+.side-tools{
+  position:sticky;top:-10px;z-index:3;display:flex;justify-content:flex-end;
+  padding:8px 2px;margin:-10px 0 2px;background:var(--panel);
+  border-bottom:1px solid var(--line);
+}
+.side-fold{
+  font:inherit;font-size:12px;font-weight:500;line-height:1.5;color:var(--dim);background:#fff;
+  border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer;
+  white-space:nowrap;transition:all .12s;
+}
+.side-fold::before{content:'⇕';margin-right:5px;font-size:11px;color:var(--faint)}
+.side-fold:hover{border-color:var(--acc-line);color:var(--acc);background:var(--acc-bg)}
+.side-fold:hover::before{color:var(--acc)}
+.side-fold:active{background:var(--acc-bg)}
 .sgroup{font-size:11px;color:var(--faint);letter-spacing:.8px;padding:16px 10px 6px;font-weight:600;display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none}
 .sgroup:hover{color:#6b7684}
 .sgroup .cnt{color:#c3cad4;font-weight:400}

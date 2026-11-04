@@ -124,8 +124,11 @@
 
   function renderSide() {
     var g = groupBy(items, 'direction');
-    var h = '';
-    orderedDirs(g).forEach(function (dir) {
+    var dirs = orderedDirs(g);
+    var h = '<div class="side-tools"><button type="button" class="side-fold" id="foldAll">' +
+      (dirs.length && dirs.every(function (d) { return folds[d]; }) ? '全部展开' : '全部折叠') +
+      '</button></div>';
+    dirs.forEach(function (dir) {
       var list = g[dir];
       h += '<div class="sgwrap' + (folds[dir] ? ' closed' : '') + '" data-dir="' + esc(dir) + '">' +
         '<div class="sgroup" title="点击折叠/展开">' + esc(dir) +
@@ -144,10 +147,36 @@
         var wrap = gd.parentNode;
         var closed = wrap.classList.toggle('closed');
         folds[wrap.dataset.dir] = closed;
-        try { localStorage.setItem(FOLD_KEY, JSON.stringify(folds)); } catch (e) {}
+        saveFolds();
+        syncFoldBtn(dirs);
       });
     });
+
+    var btn = side.querySelector('#foldAll');
+    if (btn) {
+      btn.addEventListener('click', function () {
+        var collapse = !dirs.every(function (d) { return folds[d]; });
+        dirs.forEach(function (d) { folds[d] = collapse; });
+        saveFolds();
+        Array.prototype.forEach.call(side.querySelectorAll('.sgwrap'), function (w) {
+          w.classList.toggle('closed', collapse);
+        });
+        syncFoldBtn(dirs);
+      });
+    }
     markSide();
+  }
+
+  function saveFolds() {
+    try { localStorage.setItem(FOLD_KEY, JSON.stringify(folds)); } catch (e) {}
+  }
+
+  /* 按钮文案跟随当前状态：全收起时显示「全部展开」 */
+  function syncFoldBtn(dirs) {
+    var btn = side.querySelector('#foldAll');
+    if (!btn) return;
+    var allClosed = dirs && dirs.length && dirs.every(function (d) { return folds[d]; });
+    btn.textContent = allClosed ? '全部展开' : '全部折叠';
   }
   function markSide() {
     var id = currentCardId();
