@@ -57,6 +57,156 @@ def parse_front_matter(text):
     return meta, body
 
 
+# --------------------------------------------------------------- 代码高亮
+# 构建期就把 token 切好，页面只负责上色：运行时不跑高亮库，零依赖、离线可用、
+# 复制出来仍是原文（span 不影响 textContent）。
+
+_ESC_MAP = str.maketrans({"&": "&amp;", "<": "&lt;", ">": "&gt;"})
+_ID_RE = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
+_NUM_RE = re.compile(
+    r"0[xX][0-9a-fA-F_]+[lL]?|\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?[lLfFdD]?"
+)
+
+JAVA_KW = set(
+    """abstract assert boolean break byte case catch char class const continue default do double else enum
+    extends final finally float for goto if implements import instanceof int interface long native new package
+    private protected public return short static strictfp super switch synchronized this throw throws transient
+    try var void volatile while record sealed permits yield""".split()
+)
+
+SQL_KW = set(
+    """select from where group by order having limit offset insert into values update set delete create table alter
+    add drop truncate index unique join left right inner outer full cross on as and or not null is in exists between
+    like distinct union all case when then else end count sum avg min max coalesce ifnull isnull primary key foreign
+    references default asc desc begin commit rollback transaction explain partition over window row_number rank""".split()
+)
+
+SHELL_KW = set(
+    """if then else elif fi for while until do done case esac function in return export local read echo printf exit
+    source set unset shift test""".split()
+)
+
+CODE_LANGS = {
+    # kw=关键字  lit=字面量  lc=行注释  bc=块注释  q=字符串引号  ci=大小写不敏感
+    # key=把 `xxx:` 的 xxx 当键名  annot=识别 @注解  constant=把全大写标识符当常量
+    "java": dict(kw=JAVA_KW, lit={"true", "false", "null"}, lc="//", bc=("/*", "*/"),
+                 q="\"'", annot=True, constant=True),
+    "sql": dict(kw=SQL_KW, lit={"true", "false", "null"}, lc="--", bc=("/*", "*/"),
+                q="'\"`", ci=True),
+    "json": dict(kw=set(), lit={"true", "false", "null"}, q="\"", key=True),
+    "yaml": dict(kw={"true", "false", "null", "yes", "no", "on", "off"}, lc="#",
+                 q="\"'", key=True),
+    "bash": dict(kw=SHELL_KW, lc="#", q="\"'"),
+    "lua": dict(kw=set("""local function if then else elseif end for while do return break repeat until in
+        nil true false and or not""".split()), lit={"nil", "true", "false"},
+               lc="--", bc=("--[[", "]]"), q="\"'"),
+    "sh": dict(kw=SHELL_KW, lc="#", q="\"'"),
+    "shell": dict(kw=SHELL_KW, lc="#", q="\"'"),
+    "properties": dict(kw=set(), lc="#", q="\"'", key=True),
+}
+
+
+def _tok(cls, text):
+    return '<span class="t-%s">%s</span>' % (cls, text.translate(_ESC_MAP))
+
+
+def highlight(code, lang):
+    """把源码切成带 class 的 span。语言不认识就原样转义，绝不吞内容。"""
+    spec = CODE_LANGS.get((lang or "").lower().strip())
+    if not spec:
+        return code.translate(_ESC_MAP)
+
+    kw, lit = spec.get("kw") or set(), spec.get("lit") or set()
+    lc, bc = spec.get("lc"), spec.get("bc")
+    quotes, ci = spec.get("q") or "\"'", spec.get("ci")
+    annot, key_style = spec.get("annot"), spec.get("key")
+    constant = spec.get("constant")
+
+    out, i, n = [], 0, len(code)
+
+    def key_ahead(j):
+        """跳过空白后是不是 ':'（JSON / YAML 的键名判断）。"""
+        k = j
+        while k < n and code[k] in " \t":
+            k += 1
+        return key_style and k < n and code[k] == ":"
+
+    while i < n:
+        c = code[i]
+
+        if bc and code.startswith(bc[0], i):
+            j = code.find(bc[1], i + len(bc[0]))
+            j = n if j < 0 else j + len(bc[1])
+            out.append(_tok("cm", code[i:j]))
+            i = j
+            continue
+
+        if lc and code.startswith(lc, i):
+            j = code.find("\n", i)
+            j = n if j < 0 else j
+            out.append(_tok("cm", code[i:j]))
+            i = j
+            continue
+
+        if annot and c == "@":
+            m = _ID_RE.match(code, i + 1)
+            if m:
+                out.append(_tok("an", code[i:m.end()]))
+                i = m.end()
+                continue
+
+        if c in quotes:
+            j = i + 1
+            while j < n:
+                if code[j] == "\\":
+                    j += 2
+                    continue
+                if code[j] == c:
+                    j += 1
+                    break
+                if code[j] == "\n":      # 未闭合：到行尾就停，别把后面的代码全吞了
+                    break
+                j += 1
+            j = min(j, n)
+            out.append(_tok("key" if key_ahead(j) else "str", code[i:j]))
+            i = j
+            continue
+
+        if c.isdigit():
+            m = _NUM_RE.match(code, i)
+            if m and m.end() > i:
+                out.append(_tok("num", m.group(0)))
+                i = m.end()
+                continue
+
+        m = _ID_RE.match(code, i)
+        if m:
+            w, j = m.group(0), m.end()
+            probe = w.lower() if ci else w
+            if probe in kw:
+                cls = "kw"
+            elif probe in lit:
+                cls = "lit"
+            elif constant and len(w) > 1 and w.isupper():
+                cls = "const"
+            elif j < n and code[j] == "(":
+                cls = "fn"
+            elif c.isupper():
+                cls = "ty"
+            elif key_style and code[j:j + 1] == ":":
+                cls = "key"
+            else:
+                cls = None
+            out.append(_tok(cls, w) if cls else w.translate(_ESC_MAP))
+            i = j
+            continue
+
+        out.append(c.translate(_ESC_MAP))
+        i += 1
+
+    return "".join(out)
+
+
 # ------------------------------------------------------------------- markdown
 
 def inline(s):
@@ -154,11 +304,12 @@ def md_to_html(md, hid_prefix=None):
             i += 1
             buf = []
             while i < n and not lines[i].strip().startswith("```"):
-                buf.append(html.escape(lines[i]))
+                buf.append(lines[i])
                 i += 1
             i += 1
-            cls = " class='lang-%s'" % lang if lang else ""
-            out.append("<pre><code%s>%s</code></pre>" % (cls, "\n".join(buf)))
+            attr = ' data-lang="%s"' % html.escape(lang) if lang else ""
+            out.append('<div class="cb"%s><pre><code>%s</code></pre></div>'
+                       % (attr, highlight("\n".join(buf), lang)))
             continue
 
         m = re.match(r"^(#{1,6})\s+(.*)$", s)

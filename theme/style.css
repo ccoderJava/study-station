@@ -5,6 +5,30 @@
   --sc:#b45309; --sc-bg:#fff8ec; --sc-line:#f2d6a8;
   --ok:#0f766e; --ok-bg:#eefaf6; --ok-line:#bfe3dc;
   --warn:#a16207;
+  /* 代码高亮：默认 = 浅色 */
+  --c-bg:#fafbfd; --c-line:#e3e7ee; --c-fg:#26303d;
+  --c-kw:#cf222e; --c-str:#0a3069; --c-num:#0550ae; --c-cm:#6e7781;
+  --c-fn:#8250df; --c-ty:#953800; --c-an:#116329; --c-key:#0a3069;
+  --c-tag:#98a2b1;
+}
+/* 代码配色方案：切换 html[data-code] 即可，不重建页面 */
+html[data-code="dark"]{
+  --c-bg:#1e222a; --c-line:#2f3540; --c-fg:#ccd6e4;
+  --c-kw:#c678dd; --c-str:#98c379; --c-num:#d19a66; --c-cm:#7b8494;
+  --c-fn:#61afef; --c-ty:#e5c07b; --c-an:#56b6c2; --c-key:#7fb3e8;
+  --c-tag:#8b93a3;
+}
+html[data-code="solar"]{
+  --c-bg:#fdf6e3; --c-line:#eee8d5; --c-fg:#4e5d63;
+  --c-kw:#859900; --c-str:#2aa198; --c-num:#d33682; --c-cm:#9aa6a2;
+  --c-fn:#268bd2; --c-ty:#b58900; --c-an:#cb4b16; --c-key:#268bd2;
+  --c-tag:#a39a82;
+}
+html[data-code="monokai"]{
+  --c-bg:#272822; --c-line:#3d3e35; --c-fg:#f8f8f2;
+  --c-kw:#f92672; --c-str:#e6db74; --c-num:#ae81ff; --c-cm:#8a8578;
+  --c-fn:#a6e22e; --c-ty:#66d9ef; --c-an:#fd971f; --c-key:#e6db74;
+  --c-tag:#8f8a7a;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
@@ -297,10 +321,28 @@ article code{
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 article pre{
-  background:#fafbfd;border:1px solid var(--line);border-radius:10px;padding:14px 16px;
-  overflow-x:auto;line-height:1.65;
+  background:var(--c-bg);border:1px solid var(--c-line);border-radius:10px;
+  padding:20px 16px 14px;margin:0;overflow-x:auto;line-height:1.65;
+  transition:background .16s ease,border-color .16s ease;
 }
-article pre code{background:none;color:#26303d;padding:0;font-size:12.5px}
+article pre code{background:none;color:var(--c-fg);padding:0;font-size:12.5px}
+article .cb{position:relative;margin:15px 0}
+article .cb[data-lang]::after{
+  content:attr(data-lang);position:absolute;right:11px;top:7px;z-index:1;
+  font:10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.5px;
+  color:var(--c-tag);pointer-events:none;text-transform:lowercase;
+}
+/* token 颜色只取变量，换主题不用改结构 */
+article pre .t-kw{color:var(--c-kw)}
+article pre .t-str{color:var(--c-str)}
+article pre .t-num{color:var(--c-num)}
+article pre .t-lit{color:var(--c-num)}
+article pre .t-const{color:var(--c-num)}
+article pre .t-cm{color:var(--c-cm)}
+article pre .t-fn{color:var(--c-fn)}
+article pre .t-ty{color:var(--c-ty)}
+article pre .t-an{color:var(--c-an)}
+article pre .t-key{color:var(--c-key)}
 article hr{border:none;border-top:1px solid var(--line);margin:24px 0}
 .tw{overflow-x:auto;margin:14px 0}
 article table{border-collapse:collapse;width:100%;font-size:13.5px}
@@ -410,6 +452,20 @@ body.lb-open{overflow:hidden}
   white-space:nowrap;
 }
 .databtn:hover{border-color:var(--acc-line);color:var(--acc);background:var(--acc-bg)}
+.codesel{
+  display:flex;align-items:center;gap:6px;margin-left:10px;padding:4px 6px 4px 10px;
+  border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--dim);
+  font-size:12.5px;white-space:nowrap;cursor:pointer;
+}
+.codesel:hover{border-color:var(--acc-line);color:var(--acc);background:var(--acc-bg)}
+.codesel select{
+  font:inherit;font-size:12.5px;color:inherit;background-color:transparent;
+  border:0;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;
+  padding:1px 15px 1px 0;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%238a96a6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 2px center;
+}
+.codesel select option{color:#1f2933;background:#fff}
 
 /* ---------- due bar ---------- */
 .duebar{
@@ -514,6 +570,8 @@ body.lb-open{overflow:hidden}
   article{font-size:14.5px}
   .footnav{flex-direction:column}
   .databtn{margin-left:0}
+  .codesel{margin-left:0;padding-left:8px}
+  .codesel select{max-width:86px}
   .duebar{flex-direction:column;align-items:stretch;gap:10px}
   .stats.three{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
   .rcard{flex-direction:column;gap:9px;align-items:stretch}

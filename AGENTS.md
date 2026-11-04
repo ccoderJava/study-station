@@ -86,6 +86,18 @@ front-matter 字段与枚举的权威定义在 `FORMAT.md`，改字段先改那�
 - 插图天然支持点击放大：全屏灯箱 + 滚轮缩放 + 拖动平移 + Esc 关闭（`theme/app.js` 的 `initFigure`）。所以内联状态也要能看清整体结构，别指望用户点开才看懂。
 - `build.py --check` 会校验插图文件是否存在，引用不存在的图会直接失败。
 
+### 代码块要带语言标识
+
+````markdown
+```java
+public void foo() {}
+```
+````
+
+- 语言标识决定上色。`java` / `sql` / `json` / `yaml` / `lua` / `bash` 在 `build.py` 的 `CODE_LANGS` 里；不写标识就是纯等宽文本（ASCII 图请用 ```text）。
+- 高亮在构建期完成，页面零运行时开销、不依赖任何高亮库。加新语言只需往 `CODE_LANGS` 加一条关键字表。
+- 页头「代码」下拉可切四套配色（浅色 / 深色 / Solarized / Monokai），颜色全走 `--c-*` CSS 变量，改配色不要动 HTML。
+
 ### 归类由 agent 决定，不要问用户
 
 用户不关注节点编号（`A1`/`B3`/`C6` 这类），也不想被问「挂哪个知识点」。约定：

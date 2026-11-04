@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Offer 斩杀 · 支付 / 清结算 / Java</title>
 <link rel="stylesheet" href="assets/style.css"/>
+<script>
+/* 尽早定下代码配色，避免正文先白后黑闪一下 */
+(function () {
+  try {
+    var v = localStorage.getItem('review-code-style-v1');
+    if (v) document.documentElement.setAttribute('data-code', v);
+  } catch (e) {}
+})();
+</script>
 </head>
 <body>
 <header>
@@ -20,6 +29,14 @@
     <input id="q" placeholder="搜索知识点、卡片、关键词…" autocomplete="off"/>
     <div id="qres" class="qres"></div>
   </div>
+  <label class="codesel" title="代码配色方案">代码
+    <select id="codeStyle" aria-label="代码配色方案">
+      <option value="light">浅色</option>
+      <option value="dark">深色</option>
+      <option value="solar">Solarized</option>
+      <option value="monokai">Monokai</option>
+    </select>
+  </label>
   <button id="dataBtn" class="databtn" title="导出 / 导入学习进度">数据</button>
 </header>
 <div class="layout">

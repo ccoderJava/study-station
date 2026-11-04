@@ -1484,9 +1484,32 @@
     });
   }
 
+  /* ------------------------------------------------------------ 代码配色
+     只切 html[data-code]，颜色全走 CSS 变量，正文不重渲染、滚动位置不丢。 */
+  var CODE_KEY = 'review-code-style-v1';
+  function initCodeStyle() {
+    var sel = document.getElementById('codeStyle');
+    if (!sel) return;
+    var cur = 'light';
+    try { cur = localStorage.getItem(CODE_KEY) || 'light'; } catch (e) {}
+    var ok = false;
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === cur) ok = true;
+    }
+    if (!ok) cur = 'light';
+    sel.value = cur;
+    document.documentElement.setAttribute('data-code', cur);
+    sel.addEventListener('change', function () {
+      var v = sel.value || 'light';
+      document.documentElement.setAttribute('data-code', v);
+      try { localStorage.setItem(CODE_KEY, v); } catch (e) {}
+    });
+  }
+
   window.addEventListener('hashchange', route);
   bindSideResize();
   initFigure();
+  initCodeStyle();
   renderSide();
   route();
 })();

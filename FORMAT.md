@@ -221,6 +221,14 @@ python3 build.py --check
 
 **画图就要落进文档**：只在对话里回一张图、或把图存到 `/tmp`，等于没画。凡是给用户画的结构图 / 时序图 / 状态图，一律写成 `theme/img/主题-用途.svg` 并插进对应卡片正文，否则下次打开站点就看不到了。
 
+**代码块**：语言标识必须写，构建期据此上色。
+
+- 支持 `java`（主用）、`sql`、`json`、`yaml`、`lua`、`bash` / `sh` / `shell`、`properties`；`text` 和裸 ``` 只做等宽排版，不上色（ASCII 图就该用这两种）。
+- 高亮在**构建期**切好 token，页面只负责上色：运行时不加载任何高亮库，离线可用，复制出来仍是原文。
+- 切出来的是 `<span class="t-*">`，共 8 类：`kw` 关键字、`str` 字符串、`num` 数字、`lit` 字面量、`const` 常量、`cm` 注释、`fn` 方法、`ty` 类型、`an` 注解、`key` 键名。颜色全部来自 CSS 变量，不写在 HTML 里。
+- 页头右上角有「代码」下拉，四套配色：浅色 / 深色 / Solarized / Monokai。选择存 `localStorage` 的 `review-code-style-v1`，只切 `html[data-code]`，不重渲染正文。
+- 代码块右上角自动显示语言名，不用手写标题。代码块内横向滚动，不撑破正文。
+
 **没有任何第三方依赖**，不需要 npm、不需要装包，Python 3 自带环境就能跑。
 
 ---
@@ -234,3 +242,4 @@ python3 build.py --check
 - 插图优先用 svg：内联、体积小、放大不糊；源文件统一放 `theme/img/`，命名用 `内容主题-用途.svg`
 - 画图必须进正文（`theme/img/*.svg` + `![图注](img/....svg)`），不要只贴在对话里；插图落盘后 `build.py` 自动接上点击放大
 - ASCII 图（```text 代码块）和 svg 插图不重复画同一件事：svg 给全貌，ascii 给可复制的细节
+- 代码块一律带语言标识（```java / ```sql），否则不上色；新增语言在 `build.py` 的 `CODE_LANGS` 里加一条关键字表即可
