@@ -308,19 +308,59 @@ article th,article td{border:1px solid var(--line);padding:8px 12px;text-align:l
 article th{background:var(--panel2);font-weight:600;color:#111c28}
 article figure{margin:20px 0 22px}
 article figure.fig{
-  border:1px solid var(--line);border-radius:10px;background:#fff;
+  position:relative;cursor:zoom-in;border:1px solid var(--line);border-radius:10px;background:#fff;
   padding:16px 18px 12px;overflow-x:auto;
 }
+article figure.fig:hover{border-color:var(--acc-line)}
+article figure.fig::after{
+  content:"点击放大";position:absolute;right:10px;top:10px;z-index:1;
+  font-size:11px;line-height:1;padding:5px 9px;border-radius:20px;
+  background:rgba(17,28,40,.72);color:#fff;opacity:0;transition:opacity .15s;pointer-events:none;
+}
+article figure.fig:hover::after{opacity:1}
 article figure .figsvg{display:block;width:100%;height:auto;min-width:680px}
 article figure img{
   display:block;width:100%;height:auto;background:#fff;
-  border:1px solid var(--line);border-radius:10px;
+  border:1px solid var(--line);border-radius:10px;cursor:zoom-in;
 }
 article figcaption{
   margin-top:9px;font-size:12.5px;line-height:1.6;color:var(--faint);text-align:center;
 }
 article strong{color:#0f1720;font-weight:600}
 article a{border-bottom:1px solid var(--acc-line)}
+
+/* ---------- 插图放大 ---------- */
+.lb{position:fixed;inset:0;z-index:120;display:none;flex-direction:column;background:#0a1018}
+.lb.on{display:flex}
+.lb-stage{position:relative;flex:1 1 auto;min-height:0;overflow:hidden;cursor:grab;touch-action:none}
+.lb-stage.dragging{cursor:grabbing}
+.lb-box{
+  position:absolute;left:50%;top:50%;transform-origin:0 0;will-change:transform;
+  background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 24px 72px rgba(0,0,0,.5);
+}
+.lb-box svg,.lb-box img{display:block;max-width:none}
+.lb-bar{
+  flex:0 0 auto;display:flex;align-items:center;gap:9px;padding:11px 16px;
+  background:rgba(8,14,24,.55);
+}
+.lb-cap{
+  flex:1;min-width:0;font-size:13px;line-height:1.5;color:#e7eef7;opacity:.92;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.lb-tip{font-size:11.5px;color:#8b9bb0;white-space:nowrap}
+.lb-btn{
+  height:28px;min-width:28px;padding:0 9px;border-radius:7px;
+  border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.08);
+  color:#e7eef7;font-size:12.5px;line-height:1;cursor:pointer;
+}
+.lb-btn:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.4)}
+.lb-btn.x{font-size:17px;padding:0 6px}
+body.lb-open{overflow:hidden}
+@media (max-width:720px){
+  .lb-tip{display:none}
+  .lb-cap{font-size:12px}
+}
+@media print{.lb{display:none!important}}
 
 .footnav{display:flex;gap:10px;margin-top:44px;padding-top:20px;border-top:1px solid var(--line)}
 .footnav a{

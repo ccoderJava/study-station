@@ -321,6 +321,17 @@ def build_data():
         N["cards"] = [c["id"] for c in cards if N["id"] in c["nodes"]]
         N["scenarios"] = [c["id"] for c in scenarios if N["id"] in c["nodes"]]
 
+    # 插图必须真实存在：md 里写了 ![图注](img/x.svg) 但文件不在，页面会静默少一张图
+    for obj in items + nodes:
+        for m in re.finditer(r"!\[[^\]]*\]\(([^)\s]+)\)", obj["_body"]):
+            src = m.group(1)
+            if src.startswith(("http://", "https://")):
+                problems.append("%s 引用了外链插图（内网打不开）: %s" % (obj["id"], src))
+                continue
+            if not (os.path.exists(os.path.join(THEME, "img", os.path.basename(src)))
+                    or os.path.exists(os.path.join(BASE, src))):
+                problems.append("%s 引用的插图不存在: %s" % (obj["id"], src))
+
     data = {
         "generated": TODAY,
         "layers": [{"id": l["id"], "name": l["name"], "role": l.get("role", ""),
