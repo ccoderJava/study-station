@@ -231,6 +231,125 @@ public class ConfigRefresher implements SmartInitializingSingleton {
 }
 ```
 
+### 六、把整条链路画出来：启动 / 运行 / 关停三张图
+
+上面五节是拆开讲的，实际出事时是**三段时序连在一起**：启动期没起来、运行期刷空了、关停期查不到。这三段各对应一个 Spring 扩展点，也各有各的坑。先看图，再看后面的坑清单。
+
+**图 1：启动期——首轮加载到底卡在哪一步**
+
+```text
+启动期
+ │
+ ├─ new ConfigRefresher()
+ │    └─ @PostConstruct
+ │         只做本组件的事：建容器、建调度器（不 start）、校验参数
+ │
+ ├─ 容器内所有单例创建完毕
+ │    └─ mapper / 动态数据源 / 配置客户端 / 加解密 都在这一步完成
+ │
+ ├─ SmartInitializingSingleton.afterSingletonsInstantiated()   ◀── 首轮加载放这里
+ │    │
+ │    ├─ loadOnce() 查库
+ │    │    ├─ 拿到完整数据  →  AtomicReference.set(配置)
+ │    │    ├─ 空结果        →  throw IllegalStateException
+ │    │    └─ 抛异常        →  不 catch，继续向上抛
+ │    │
+ │    └─ 一旦抛出 → refresh() 失败 → 进程退出 → Pod 启动失败 → K8s 重试
+ │
+ ├─ Lifecycle.start() / ContextRefreshedEvent
+ │    └─ web 服务器此刻才开始监听端口   ◀── 流量从这里起可以进来
+ │
+ └─ ApplicationRunner（refresh 之后执行）
+      └─ 放这里 = 首轮失败时，已经接进了一批用空配置处理的请求
+```
+
+读图要点：三条横线把启动期切成四段。`@PostConstruct` 只保证**本组件**就绪；`afterSingletonsInstantiated` 才保证**整个容器**就绪，而且端口还没开；`Lifecycle.start` 之后端口才监听。**首轮加载只能放第二条线**——早一步依赖没齐，晚一步流量已进。
+
+**图 2：运行期——一次刷新的决策流**
+
+```text
+守护线程每 30s 醒来（daemon = true，不阻止退出）
+ │
+ ├─ 拉版本号（长轮询，超时 5s）
+ │    ├─ 超时 / 网络失败 ─────────  计一次失败，本轮结束（不动缓存）
+ │    └─ 版本号没变 ─────────────  直接返回，不拉全量
+ │
+ ├─ 版本号变了 → 拉全量配置
+ │    ├─ 结果为空 ───────────────  log.warn + 保留上一版（空 ≠ 配置被删光）
+ │    └─ 抛异常 ─────────────────  log.error + 保留上一版 + 计数
+ │
+ ├─ 用新参数新建连接池 → 预热 1 个连接探活
+ │    ├─ 预热失败 ───────────────  关掉新池、保留旧池、告警、下轮重试
+ │    └─ 预热成功
+ │
+ ├─ AtomicReference.set(新池)     ◀── 原子切换点，读侧只会看到完整的池
+ │
+ └─ 旧池延迟 5 分钟关闭 ─────────  等在途事务自然结束（双缓冲）
+```
+
+三个「不写就出事」的判断点：**空结果、异常、预热失败**。三者都必须走「保留上一版」，只有跑完整条链路才允许 `set`。
+
+**图 3：关停期——谁先停、谁后停**
+
+```text
+T0        Pod 标记 Terminating
+ │         ├─ Endpoints 摘除：新流量不再进来（在途请求还在跑）
+ │         └─ preStop: sleep 8   ← 给摘流量和连接归还留时间
+ ▼
+T0+8s     SIGTERM → Spring 收到 ContextClosedEvent
+ │         ├─ server.shutdown=graceful：停收新请求，等在途请求跑完
+ │         ├─ SmartLifecycle.stop()   按 phase 降序执行
+ │         │    └─ phase = MAX-100 的刷新线程先停：shutdownNow + awaitTermination(5s)
+ │         ├─ @PreDestroy：关闭新旧两个连接池
+ │         └─ 进程正常退出
+ ▼
+T0+30s    terminationGracePeriodSeconds 到期 → SIGKILL（兜底，不触发任何 hook）
+```
+
+反面就是上一节的报错表：如果刷新线程只是 `setDaemon(true)`、没进关闭序列，`SmartLifecycle.stop()` 那一步根本不存在，实际顺序变成「先关连接池、线程还在跑」，下一秒就去查库。
+
+三张图串成一句话：**启动期保证「起来就有配置」，运行期保证「刷新失败不降级」，关停期保证「停的时候不查库」。**
+
+### 七、分阶段坑清单（发布前对着过一遍）
+
+「常见陷阱」那一节讲的是守护线程本身的通用坑，这张清单只针对**配置热更新**这一个场景，按阶段列，每条一行，方便上线前扫一遍。
+
+**启动期**
+
+| 坑 | 现象 | 根因 | 修法 |
+|---|---|---|---|
+| 首轮放 `@PostConstruct` | 启动日志一条「配置为空 / 连接失败」，之后靠定时任务慢慢补 | 此时只有本 bean 的依赖就绪，动态数据源、mapper 可能还没好 | 挪到 `SmartInitializingSingleton` |
+| 首轮放 `ApplicationRunner` | 发布后几秒内报「无可用通道」「限流不生效」 | 它执行时 refresh 已完成、端口已在监听 | 同上 |
+| 首轮失败只打日志 | 应用正常起来，但跑的是默认值 | 没有 fail-fast，K8s 以为启动成功 | 抛异常让 Pod 起不来，交给 K8s 重试 |
+| `@PostConstruct` 里就 `scheduler.start()` | 第一次刷新必然失败，之后偶发失败 | 线程先于容器就绪 | `@PostConstruct` 只建不启，`afterSingletonsInstantiated` 末尾再 start |
+| 首轮查询没设超时 | 数据库慢时启动卡住，readiness 探针超时，Pod 被反复重启 | 同步调用无限等 | 首轮单独设 2~3s 超时，超时即 fail-fast |
+
+**运行期**
+
+| 坑 | 现象 | 根因 | 修法 |
+|---|---|---|---|
+| 空结果覆盖 | 发布窗口内限流失效、白名单全放开 | `selectAll()` 返回空集合不抛异常，循环零次 | 空也要 `return`，保留上一版 |
+| `catch` 后只打 debug | 故障期间日志干净，事后查不到 | 异常被吞 | error + 计数 + 告警，失败率超阈值就报 |
+| 每次刷新 new 连接池但不关旧池 | 跑几天后连接数打满、句柄耗尽 | 只做了 `set`，没做延迟关闭 | 记录旧池引用，延迟 5 分钟 `close()` |
+| 只换 `DataSource` 引用，mapper 还用旧的 | 配置改了不生效，重启才好 | `SqlSessionFactory` / `JdbcTemplate` 启动时就固化了数据源 | 换持有数据源的工厂，或用 `AbstractRoutingDataSource` 包一层做切换 |
+| 版本号用普通 `long` | 偶发不刷新，或重复拉全量 | 多线程可见性 | `volatile long` 或 `AtomicLong` |
+| 用 `Timer` 做刷新 | 抛一次异常后线程静默死掉，此后再也不刷新 | `Timer` 单线程，任务抛异常即终止整个 Timer | 用 `ScheduledExecutorService`，异常在任务内自己 catch |
+| 没设 `UncaughtExceptionHandler` | 线程死了没人知道 | 默认只打到 stderr，容器里未必收 | 显式 set，打 error 并上报 |
+| 新配置用 `putAll` 合并进旧 Map | 配置中心删掉的 key 还在生效 | 合并而非整体替换 | 每轮构造全新 Map，再整体 `set` |
+
+**关停期**
+
+| 坑 | 现象 | 根因 | 修法 |
+|---|---|---|---|
+| 刷新线程没进关闭序列 | 发布时偶发 `HikariDataSource has been closed`，发布完自愈 | daemon 不受 Spring 生命周期管理 | 实现 `SmartLifecycle`，phase 给大值 |
+| `awaitTermination` 没设上限 | Pod 卡满 30s 被 SIGKILL，日志截断在半句 | 无界等待 | 给 5s 上限，超时就放弃 |
+| 靠 `finally` 收尾 | 收尾代码时灵时不灵，90% 的发布正常 | 守护线程不保证执行 `finally` | 用显式 `stop()` / `@PreDestroy` |
+| 没配 `preStop` | 摘流量和关进程几乎同时，必然有一批请求失败 | Endpoints 摘除是异步的，有秒级延迟 | `preStop: sleep 8` |
+| 关停顺序靠「代码里先写谁」 | 换个容器或框架顺序就乱 | 隐式约定 | 用 phase 显式声明先后 |
+| `stop()` 里不打日志 | 出问题只能靠猜「到底停到哪一步了」 | 无状态输出 | 打一行「刷新线程已停，剩余任务 N，耗时 X ms」 |
+
+三条优先级最高：**首轮放对位置（`SmartInitializingSingleton`）、空结果不覆盖、刷新线程进关闭序列（`SmartLifecycle` 大 phase）**。这三件事做到，滚动发布时那类「偶发、重启后自愈、日志里只有一条连接异常」的故障基本就绝迹了。
+
 ## 为什么这么设计
 
 设计者要解决的是一个很具体的问题：**JVM 需要一个「进程还活着」的明确定义**。
