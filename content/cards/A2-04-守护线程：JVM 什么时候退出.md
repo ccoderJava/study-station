@@ -19,6 +19,8 @@ updated: 2026-11-04
 
 三个必须记住的点：`setDaemon(true)` 必须在 `start()` **之前**，否则抛 `IllegalThreadStateException`；守护状态在**构造时从父线程继承**，所以守护线程里 new 出来的线程池默认也是守护的；它只适合「进程活着才有意义、退出时不需要收尾」的活——配置刷新、心跳续约、监控上报，不适合刷盘、提交事务。
 
+最需要提防的不是「被杀」，而是**退出期的数据真空**：Pod 关停时连接池先被 `close()`，守护线程还在跑 mapper 查询，查不到数据；如果代码把空结果当成最新配置，内存就被刷成空的，进程还活着，继续用空配置接流量。
+
 ## 是什么
 
 ### 一、唯一的语义：不阻止 JVM 退出
@@ -118,6 +120,71 @@ Eureka、Nacos 客户端的心跳线程都是后台线程。客户端进程没�
 
 反过来的例子更值得记：**流水落盘、事务提交、消息发送确认，绝对不能放守护线程**——这几件事的共同点是「丢了要赔钱」。
 
+### 五、退出期是数据真空区：守护线程里的 mapper 调用会失效
+
+这是守护线程做配置刷新时最容易忽略的一段。**daemon 只保证「不被等」，不保证「被正确停止」**——它不会收到任何关闭通知，完全可能在连接池已经关掉之后还在跑。
+
+Pod 滚动发布或重启时的真实时序：
+
+| 时刻 | 发生了什么 | 守护线程知道吗 |
+|---|---|---|
+| T0 | API Server 标记 Pod `Terminating`，同时从 Endpoints 摘除 | 不知道，还在 `sleep` |
+| T0+ | 容器 runtime 发 `SIGTERM`，Spring 收到 `ContextClosedEvent` | 不知道 |
+| T0+ | 停止接新请求，等在途请求跑完（`server.shutdown=graceful`） | 不知道 |
+| T0+ | 销毁单例 bean，`DataSource.close()`，连接池关闭 | 不知道 |
+| T0+ | 这一轮醒来，执行 `mapper.selectAll()` | **池已经关了，抛异常或拿不到数据** |
+| T0+30s | `terminationGracePeriodSeconds` 到期，`SIGKILL` | 直接消失 |
+
+报错长这样，看到就应该反应过来是关停时序问题，而不是 SQL 写错了：
+
+- `SQLException: HikariDataSource xxx has been closed`
+- `HikariPool-1 - Connection is not available, request timed out after 30000ms`
+- MyBatis 包一层：`CannotGetJdbcConnectionException: Failed to obtain JDBC Connection`
+- Druid：`dataSource already closed`
+
+**真正危险的不是这一轮失败，而是失败之后代码怎么写的。** 很多人是这么写的：
+
+```java
+// 危险写法：查询结果为空时，把上一版有效配置覆盖掉
+@Scheduled(fixedDelay = 30_000)
+public void refresh() {
+    Map<String, String> next = new HashMap<>();
+    for (ConfigItem c : configMapper.selectAll()) {   // 返回空集合，不报错，循环 0 次
+        next.put(c.getKey(), c.getValue());
+    }
+    this.cache = next;                                // 内存配置变成空 Map，进程还在跑
+}
+```
+
+`selectAll()` 返回空 list 时**不会抛异常**，循环零次，`next` 是空 Map，然后被赋值。结果就是：进程没死、Pod 还是 Ready、但所有配置全没了——限流阈值变 0、路由表变空、白名单变空。这比抛异常严重得多，因为异常至少会打日志，空覆盖连日志都没有。
+
+所以这段代码必须满足两个条件：**失败和空结果都不覆盖，只有完整加载成功才替换**。
+
+```java
+private final AtomicReference<Map<String, String>> cache = new AtomicReference<>(Collections.emptyMap());
+
+public void refresh() {
+    Map<String, String> next;
+    try {
+        List<ConfigItem> list = configMapper.selectAll();
+        if (list == null || list.isEmpty()) {
+            log.warn("配置查询返回空，保留上一版，本轮跳过");   // 空 ≠ 配置被删光
+            return;
+        }
+        next = list.stream().collect(Collectors.toMap(ConfigItem::getKey, ConfigItem::getValue));
+    } catch (Exception e) {
+        log.error("配置刷新失败，保留上一版，下轮重试", e);      // 连接池关闭、连接超时都会走到这里
+        return;
+    }
+    cache.set(next);                                          // 只有完整结果才原子替换
+}
+```
+
+还有两个对称的坑：
+
+- **首轮刷新不能放在 `@PostConstruct`。** 这时 `DataSource` 可能还没初始化完，第一轮必然失败；如果失败后代码用默认值继续启动，就是「带着空配置对外服务」。首轮应该在 `ApplicationRunner` 里**同步**加载一次，失败直接抛异常让 Pod 起不来，交给 K8s 重试——启动期宁可起不来，也别带着空配置接流量。
+- **`@Scheduled` 默认线程不是守护线程，但也不受关闭顺序保护。** 它归 `TaskScheduler` 管，容器关闭时会 `shutdown`，可如果这一轮正在查库，同样会和 `DataSource.close()` 抢时序。守护与否解决不了这个问题，真正解决它的是**生命周期顺序**（见下一节的 `SmartLifecycle` phase）。
+
 ## 为什么这么设计
 
 设计者要解决的是一个很具体的问题：**JVM 需要一个「进程还活着」的明确定义**。
@@ -150,6 +217,16 @@ Eureka、Nacos 客户端的心跳线程都是后台线程。客户端进程没�
 
 写了 `try { while (running) {...} } finally { flush(); }`，指望 `finally` 兜底。守护线程不保证进 `finally`，这段收尾代码在 90% 的重启里执行了，剩下 10% 没执行——比完全不写更难查。
 
+**场景四：Pod 滚动发布时，配置被刷成了空。**
+
+守护线程每 30 秒查一次库刷新配置。滚动发布时，`DataSource` 先被 `close()`，守护线程这一轮醒来，`mapper.selectAll()` 拿到空集合（或者抛连接异常被 catch 住）。代码没判空，直接 `cache = next`，内存里的配置变成空 Map。这时候老 Pod 还在处理摘流量之前的最后几个请求，用的是空配置：
+
+- 限流阈值读成 0，所有请求被拒，或者读成默认最大值，限流彻底失效；
+- 渠道路由表为空，支付请求找不到通道，直接报「无可用通道」；
+- 白名单为空，交易拦截规则全部放开。
+
+现象是**发布窗口内出现一小批报错，发布完成后自动恢复**，日志里只有一条被 catch 住的连接异常。查起来非常费劲，因为「重启后自己好了」——这本身就是关停时序问题的典型特征。
+
 ## 替代方案
 
 | 方案 | 适用场景 | 说明 / 风险 |
@@ -180,6 +257,15 @@ Eureka、Nacos 客户端的心跳线程都是后台线程。客户端进程没�
 - 它是 `while` 循环 + `sleep` 的长任务，写成非守护，任何一次正常退出路径（灰度脚本里的 `System.exit(0)`、容器收到 `SIGTERM` 后 `main` 自然结束）都会挂在这里。
 
 但**真正的收尾不靠 daemon**：`@PreDestroy` 里先 `running = false`，再 `scheduler.shutdown()` 加 `awaitTermination(5, SECONDS)`，最后关闭新旧两个池。daemon 只保证「不捣乱」，关闭顺序由显式的生命周期方法保证。
+
+退出期还要专门防一手「拿不到配置」，四件事缺一件都可能在滚动发布时翻车：
+
+1. **把刷新线程纳入 Spring 的关闭序列。** 实现 `SmartLifecycle`，`getPhase()` 返回一个比较大的值（例如 `Integer.MAX_VALUE - 100`）。Spring 的 `stop()` 按 phase **降序**执行，phase 大就先停，于是「先停刷新线程、再关连接池」的顺序被固定下来；`stop()` 里 `scheduler.shutdownNow()` + `awaitTermination(5, SECONDS)`。
+2. **空结果和异常都不覆盖。** 时序再严谨也有窗口——连接可能正在归还、池正在关闭。只有「查到了完整数据」才 `AtomicReference.set`，其余情况保留上一版。
+3. **首轮同步加载，失败就起不来。** `ApplicationRunner` 里同步查一次，失败抛异常让 Pod 启动失败、由 K8s 重试。带着默认值启动、靠后台线程慢慢补配置，等于让第一批请求用空配置跑。
+4. **PreStop 先摘流量再关进程。** `preStop: exec: command: ["sleep","8"]`，给 Endpoints 摘除和连接归还留出时间，减少「刷新线程和关闭中的池抢连接」的概率。
+
+还有一条红线：刷新失败**必须打 error 并计数**。只 `catch` 了打个 debug，等于把这次故障藏起来——下次发布照旧复现，而且没人知道。
 
 **某银行对账批处理：反过来，是非守护 + `awaitTermination`。**
 
@@ -219,6 +305,14 @@ daemonThread.execute(() -> {
 
 `main` 是最典型的非守护线程，它的结束才是「程序该退出了」的信号。JVM 启动后除了 `main`，其余框架线程基本都是 daemon。
 
+**7）查询结果为空，直接当成「配置被清空」覆盖内存。**
+
+面试里问「守护线程做配置刷新有什么风险」，只答「退出时线程被杀」是及格，答出「关停阶段连接池先关、mapper 查库失败或返回空，把配置刷成空」才是加分项。要点是：空集合不抛异常，循环零次，覆盖悄无声息；而抛异常的写法至少还有日志。**空结果和异常都必须走到「保留上一版」这条分支**。
+
+**8）首轮刷新放在 `@PostConstruct` 或守护线程里自然启动。**
+
+Bean 初始化阶段 `DataSource` 可能还没就绪，第一轮大概率失败；如果失败后不阻塞启动，应用就带着空配置对外服务了。首轮同步加载 + 失败抛异常（fail-fast）才是对的——启动不起来，K8s 会重试；起得来但配置是空的，K8s 不会管。
+
 ## 三层追问
 
 **Q1：守护线程和普通线程到底差在哪？**
@@ -235,6 +329,9 @@ daemonThread.execute(() -> {
 
 **Q5：K8s 里配置刷新为什么不用守护线程，改用 Sidecar？**
 两者都行，取舍在职责边界。守护线程实现简单、延迟低（30 秒内生效），但每个进程都要重复实现一遍，还得自己处理失败重试和告警。Sidecar 把这件事收敛成一个镜像，业务进程彻底无状态，代价是多一个容器和一层网络。副本数量少、变更频繁的场景，守护线程更划算。
+
+**Q6：守护线程做配置刷新，除了「退出时被杀」还有什么坑？**
+真正难查的是**关停阶段的数据真空**。Pod 收到 `SIGTERM` 后，Spring 会先关 `DataSource`，而守护线程不受关闭序列管理，这一轮查询要么抛 `HikariDataSource has been closed`，要么返回空集合。代码如果直接 `cache = next`，配置就被刷成空，老 Pod 在摘流量的窗口里继续用空配置处理请求。修法是三条：把刷新线程做成 `SmartLifecycle` 并给一个较大的 phase（先停线程、后关池）、空结果和异常一律保留上一版、首轮同步加载失败就 fail-fast。
 
 ## 我的口述记录
 
