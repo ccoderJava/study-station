@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 450" width="100%" role="img">
+<title>索引失效的三道关：有序性、最左前缀、成本</title>
+<desc>一条 SQL 要用上索引必须依次过三关：比较的对象必须是索引列本身（不能有函数、运算、隐式转换）、必须从联合索引最左列开始连续匹配且最多一个范围、优化器估算走索引的成本必须低于全表扫。任何一关不过，执行计划的 type 就会退化成 ALL 或 index。</desc>
+<g font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',Arial,sans-serif">
+
+  <text x="40" y="28" font-size="13.5" fill="#6b7684">一条 SQL 从「表上有索引」到「查询用上索引」，要过三关</text>
+  <text x="40" y="54" font-size="11.5" fill="#8593a3">三关是「与」的关系：任何一关不过，执行计划就退回全表扫（type=ALL）或全索引扫（type=index）</text>
+
+  <!-- 第一关 -->
+  <rect x="40" y="74" width="260" height="322" rx="10" fill="#fbfcfe" stroke="#e3e7ee" stroke-width="1.2"/>
+  <path d="M40 84a10 10 0 0 1 10-10h240a10 10 0 0 1 10 10v78H40z" fill="#e3eefc"/>
+  <text x="56" y="104" font-size="11" fill="#5f7fa8">第一关</text>
+  <text x="56" y="128" font-size="14" fill="#12385f" font-weight="600">有序性还在吗</text>
+  <text x="56" y="148" font-size="11" fill="#3d5f86">比较的必须是列本身，不是列的函数</text>
+
+  <text x="56" y="178" font-size="11" fill="#8593a3">不过关的典型写法</text>
+  <text x="56" y="204" font-size="11" fill="#a1706a" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">date(create_time) = ?</text>
+  <text x="56" y="228" font-size="11" fill="#a1706a" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">amount + 0 = 100</text>
+  <text x="56" y="252" font-size="11" fill="#a1706a" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">order_no = 123456</text>
+  <text x="56" y="268" font-size="10" fill="#b08b85">（列是 varchar，被转成数字）</text>
+  <text x="56" y="292" font-size="11" fill="#a1706a" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">like '%张'</text>
+  <text x="56" y="316" font-size="11" fill="#a1706a" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">a = 1 or b = 2</text>
+  <text x="56" y="332" font-size="10" fill="#b08b85">（b 没有索引，整体退化成全表扫）</text>
+
+  <line x1="56" y1="350" x2="284" y2="350" stroke="#e3e7ee" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="56" y="372" font-size="11.5" fill="#12385f" font-weight="600">怎么改：把运算挪到等号右边</text>
+
+  <!-- 第二关 -->
+  <rect x="320" y="74" width="260" height="322" rx="10" fill="#fbfcfe" stroke="#e3e7ee" stroke-width="1.2"/>
+  <path d="M320 84a10 10 0 0 1 10-10h240a10 10 0 0 1 10 10v78H320z" fill="#f0f5ff"/>
+  <text x="336" y="104" font-size="11" fill="#5f7fa8">第二关</text>
+  <text x="336" y="128" font-size="14" fill="#2b4a6f" font-weight="600">最左前缀对齐了吗</text>
+  <text x="336" y="148" font-size="11" fill="#3d5f86">从最左列连续匹配，中间最多一个范围</text>
+
+  <text x="336" y="178" font-size="11" fill="#8593a3">不过关的典型写法（索引 a,b,c）</text>
+  <text x="336" y="204" font-size="11" fill="#a1706a" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">where b = ?</text>
+  <text x="336" y="228" font-size="11" fill="#a1706a" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">where a = ? and c = ?</text>
+  <text x="336" y="244" font-size="10" fill="#b08b85">（c 只能靠索引下推过滤，不能定位）</text>
+  <text x="336" y="268" font-size="11" fill="#a1706a" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">where a &gt; ? and b = ?</text>
+  <text x="336" y="292" font-size="11" fill="#a1706a" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">where a = ? order by c</text>
+  <text x="336" y="316" font-size="11" fill="#a1706a" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">where c = ?</text>
+
+  <line x1="336" y1="350" x2="564" y2="350" stroke="#e3e7ee" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="336" y="372" font-size="11.5" fill="#2b4a6f" font-weight="600">怎么改：补前导列 / 调列序 / 加覆盖</text>
+
+  <!-- 第三关 -->
+  <rect x="600" y="74" width="260" height="322" rx="10" fill="#fbfcfe" stroke="#e3e7ee" stroke-width="1.2"/>
+  <path d="M600 84a10 10 0 0 1 10-10h240a10 10 0 0 1 10 10v78H600z" fill="#f4f6f9"/>
+  <text x="616" y="104" font-size="11" fill="#7b8695">第三关</text>
+  <text x="616" y="128" font-size="14" fill="#46505e" font-weight="600">成本划得来吗</text>
+  <text x="616" y="148" font-size="11" fill="#5b6574">优化器算完，走索引不一定比全表扫便宜</text>
+
+  <text x="616" y="178" font-size="11" fill="#8593a3">它会主动放弃的典型情况</text>
+  <text x="616" y="204" font-size="11" fill="#a1706a">选择性低：status 只有 5 个值</text>
+  <text x="616" y="228" font-size="11" fill="#a1706a">命中行数超过表的 20%~30%</text>
+  <text x="616" y="252" font-size="11" fill="#a1706a">统计信息过期（批量导入之后）</text>
+  <text x="616" y="276" font-size="11" fill="#a1706a">索引太多，候选里选错了</text>
+  <text x="616" y="300" font-size="11" fill="#a1706a">or 走 index merge 反而更慢</text>
+
+  <line x1="616" y1="350" x2="844" y2="350" stroke="#e3e7ee" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="616" y="372" font-size="11.5" fill="#46505e" font-weight="600">怎么改：analyze table / 调列序 / 删冗余</text>
+
+  <text x="40" y="428" font-size="12" fill="#8593a3">判断停在哪一关，只看 EXPLAIN：type 看有没有走、key_len 看用了几列、rows 与 filtered 看扫了多少筛出多少。</text>
+
+</g>
+</svg>
