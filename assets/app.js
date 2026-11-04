@@ -171,6 +171,77 @@
     try { localStorage.setItem(FOLD_KEY, JSON.stringify(folds)); } catch (e) {}
   }
 
+  /* 拖动分隔条调侧栏宽度；双击复位。宽度存 localStorage，全站生效 */
+  var SIDEW_KEY = 'review-side-w-v1';
+  var SIDEW_DEF = 264, SIDEW_MIN = 180, SIDEW_MAX = 460;
+
+  function sideWidth() {
+    var v = 0;
+    try { v = parseInt(localStorage.getItem(SIDEW_KEY), 10) || 0; } catch (e) { v = 0; }
+    if (!v) return SIDEW_DEF;
+    return Math.min(sideMax(), Math.max(SIDEW_MIN, v));
+  }
+
+  /* 上限同时受窗口宽度约束，窄屏拖到最大也不至于把正文压没 */
+  function sideMax() {
+    return Math.max(SIDEW_MIN, Math.min(SIDEW_MAX, Math.round(window.innerWidth * 0.42)));
+  }
+
+  function bindSideResize() {
+    var bar = document.getElementById('sideResize');
+    if (!bar || !side) return;
+    var dragging = false, startX = 0, startW = 0;
+
+    function apply(w) {
+      w = Math.round(Math.min(sideMax(), Math.max(SIDEW_MIN, w)));
+      side.style.flexBasis = w + 'px';
+      side.style.width = w + 'px';
+      return w;
+    }
+    apply(sideWidth());
+
+    bar.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      dragging = true;
+      startX = e.clientX;
+      startW = side.getBoundingClientRect().width;
+      bar.classList.add('drag');
+      side.classList.add('resizing');
+      document.body.classList.add('col-resizing');
+      try { bar.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+
+    bar.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      apply(startW + (e.clientX - startX));
+    });
+
+    function end() {
+      if (!dragging) return;
+      dragging = false;
+      bar.classList.remove('drag');
+      side.classList.remove('resizing');
+      document.body.classList.remove('col-resizing');
+      try {
+        localStorage.setItem(SIDEW_KEY, String(Math.round(side.getBoundingClientRect().width)));
+      } catch (err) {}
+    }
+    bar.addEventListener('pointerup', end);
+    bar.addEventListener('pointercancel', end);
+
+    bar.addEventListener('dblclick', function () {
+      apply(SIDEW_DEF);
+      try { localStorage.setItem(SIDEW_KEY, String(SIDEW_DEF)); } catch (err) {}
+    });
+
+    /* 窗口缩小时把超限宽度夹回来；放大后按存档恢复 */
+    window.addEventListener('resize', function () {
+      if (dragging) return;
+      apply(sideWidth());
+    });
+  }
+
   /* 按钮文案跟随当前状态：全收起时显示「全部展开」 */
   function syncFoldBtn(dirs) {
     var btn = side.querySelector('#foldAll');
@@ -1248,6 +1319,7 @@
   });
 
   window.addEventListener('hashchange', route);
+  bindSideResize();
   renderSide();
   route();
 })();
