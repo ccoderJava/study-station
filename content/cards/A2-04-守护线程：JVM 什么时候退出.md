@@ -120,9 +120,9 @@ Eureka、Nacos 客户端的心跳线程都是后台线程。客户端进程没�
 
 反过来的例子更值得记：**流水落盘、事务提交、消息发送确认，绝对不能放守护线程**——这几件事的共同点是「丢了要赔钱」。
 
-### 五、退出期是数据真空区：守护线程里的 mapper 调用会失效
+### 五、退出期与启动期：两个最容易踩空的时序窗口
 
-这是守护线程做配置刷新时最容易忽略的一段。**daemon 只保证「不被等」，不保证「被正确停止」**——它不会收到任何关闭通知，完全可能在连接池已经关掉之后还在跑。
+这是守护线程做配置刷新时最容易忽略的两段。**daemon 只保证「不被等」，不保证「被正确停止」**——它不会收到任何关闭通知，完全可能在连接池已经关掉之后还在跑；反过来，它启动得太早，又可能在依赖就绪之前就去查库。先看关停这一段。
 
 Pod 滚动发布或重启时的真实时序：
 
@@ -182,8 +182,54 @@ public void refresh() {
 
 还有两个对称的坑：
 
-- **首轮刷新不能放在 `@PostConstruct`。** 这时 `DataSource` 可能还没初始化完，第一轮必然失败；如果失败后代码用默认值继续启动，就是「带着空配置对外服务」。首轮应该在 `ApplicationRunner` 里**同步**加载一次，失败直接抛异常让 Pod 起不来，交给 K8s 重试——启动期宁可起不来，也别带着空配置接流量。
+- **首轮刷新不能放在 `@PostConstruct`。** 这时只有本 bean 的依赖是就绪的，容器里其他组件可能还没初始化完，第一轮大概率查不到数据。
 - **`@Scheduled` 默认线程不是守护线程，但也不受关闭顺序保护。** 它归 `TaskScheduler` 管，容器关闭时会 `shutdown`，可如果这一轮正在查库，同样会和 `DataSource.close()` 抢时序。守护与否解决不了这个问题，真正解决它的是**生命周期顺序**（见下一节的 `SmartLifecycle` phase）。
+
+**首轮到底该放哪：`@PostConstruct` 太早，`ApplicationRunner` 太晚。**
+
+`@PostConstruct` 只保证**本 bean 的依赖**注入完成，不保证**容器里其他组件**就绪。首轮加载要用的 mapper、动态数据源、加解密组件、配置元数据，只要有一个是通过 `ObjectProvider`、事件监听或后置处理器延后初始化的，就会踩空——这就是「程序刚起来那一下查不到东西」的真正来源。而且它跑在 refresh 过程中，一个组件抛异常会把整个上下文带崩。
+
+`ApplicationRunner` 又晚了一步：它在 `refresh()` 之后执行，**web 服务器已经在监听端口**，readiness 一通过流量就进来了。这时候首轮加载失败再退出，等于已经放进来一批请求，它们用的是空配置。
+
+| 阶段 | 回调 | 此刻什么已就绪 | 端口 |
+|---|---|---|---|
+| 单例创建 | 构造 → 注入 → `@PostConstruct` | 只有本 bean 的依赖 | 未监听 |
+| 所有单例创建完 | `SmartInitializingSingleton` | 全部单例：mapper、数据源、配置客户端 | 未监听 |
+| refresh 收尾 | `Lifecycle.start()` → `ContextRefreshedEvent` | 生命周期组件（含 web 服务器） | **开始监听** |
+| `run()` 结尾 | `ApplicationRunner` / `CommandLineRunner` | 全部就绪 | 已监听，可能已接流量 |
+
+正确的落点是 `SmartInitializingSingleton.afterSingletonsInstantiated()`：所有单例都实例化完才回调，依赖全部就绪；又早于 web 服务器启动，抛异常会让 refresh 失败、进程根本起不来，交给 K8s 重试。这才是「要么带着配置起来，要么别起来」。
+
+注意它的边界：只对**非懒加载的单例**生效——`@Lazy` 的 bean 不在预实例化范围内，这时候要显式 `getBean()` 触发一次。另外这个回调是同步的，跑多久启动就慢多久；首轮加载本来就该等，但别在这里做全量预热之类的大活。
+
+`@PostConstruct` 不是不用，而是**分工**：它负责本组件自己的初始化（建缓存容器、建调度器但不启动、校验参数），首轮查库放 `afterSingletonsInstantiated()`。
+
+```java
+@Component
+public class ConfigRefresher implements SmartInitializingSingleton {
+
+    private final ConfigMapper configMapper;
+    private final AtomicReference<Map<String, String>> cache = new AtomicReference<>();
+
+    @PostConstruct
+    void init() {
+        // 只做本组件的事：校验依赖、建好空容器，不查库
+    }
+
+    @Override
+    public void afterSingletonsInstantiated() {
+        loadOnce();          // 所有单例就绪，这里查库才是安全的
+    }
+
+    private void loadOnce() {
+        Map<String, String> next = loadFromDb();
+        if (next == null || next.isEmpty()) {
+            throw new IllegalStateException("首轮配置为空，拒绝启动");   // fail-fast，交给 K8s 重试
+        }
+        cache.set(next);     // 成功才替换，后面再交给守护线程定期刷新
+    }
+}
+```
 
 ## 为什么这么设计
 
@@ -262,7 +308,7 @@ public void refresh() {
 
 1. **把刷新线程纳入 Spring 的关闭序列。** 实现 `SmartLifecycle`，`getPhase()` 返回一个比较大的值（例如 `Integer.MAX_VALUE - 100`）。Spring 的 `stop()` 按 phase **降序**执行，phase 大就先停，于是「先停刷新线程、再关连接池」的顺序被固定下来；`stop()` 里 `scheduler.shutdownNow()` + `awaitTermination(5, SECONDS)`。
 2. **空结果和异常都不覆盖。** 时序再严谨也有窗口——连接可能正在归还、池正在关闭。只有「查到了完整数据」才 `AtomicReference.set`，其余情况保留上一版。
-3. **首轮同步加载，失败就起不来。** `ApplicationRunner` 里同步查一次，失败抛异常让 Pod 启动失败、由 K8s 重试。带着默认值启动、靠后台线程慢慢补配置，等于让第一批请求用空配置跑。
+3. **首轮同步加载，失败就起不来。** 用 `SmartInitializingSingleton` 在所有单例就绪后同步查一次，失败抛异常让 refresh 失败、Pod 直接起不来，由 K8s 重试。放 `@PostConstruct` 会踩「依赖还没就绪」，放 `ApplicationRunner` 时端口已经在监听、可能已经接进流量了。
 4. **PreStop 先摘流量再关进程。** `preStop: exec: command: ["sleep","8"]`，给 Endpoints 摘除和连接归还留出时间，减少「刷新线程和关闭中的池抢连接」的概率。
 
 还有一条红线：刷新失败**必须打 error 并计数**。只 `catch` 了打个 debug，等于把这次故障藏起来——下次发布照旧复现，而且没人知道。
@@ -309,9 +355,13 @@ daemonThread.execute(() -> {
 
 面试里问「守护线程做配置刷新有什么风险」，只答「退出时线程被杀」是及格，答出「关停阶段连接池先关、mapper 查库失败或返回空，把配置刷成空」才是加分项。要点是：空集合不抛异常，循环零次，覆盖悄无声息；而抛异常的写法至少还有日志。**空结果和异常都必须走到「保留上一版」这条分支**。
 
-**8）首轮刷新放在 `@PostConstruct` 或守护线程里自然启动。**
+**8）首轮刷新放在 `@PostConstruct`，或者干脆交给守护线程自己跑第一轮。**
 
-Bean 初始化阶段 `DataSource` 可能还没就绪，第一轮大概率失败；如果失败后不阻塞启动，应用就带着空配置对外服务了。首轮同步加载 + 失败抛异常（fail-fast）才是对的——启动不起来，K8s 会重试；起得来但配置是空的，K8s 不会管。
+两种错法：`@PostConstruct` 里只有本 bean 的依赖就绪，容器里其他组件可能还没起来，第一次查库就踩空；交给守护线程「自然跑起来」更糟——线程一启动就查库，DataSource 和 mapper 未必初始化完，失败后如果只是打个日志，应用就带着空配置对外服务了。
+
+正确做法是**两层分工**：`@PostConstruct` 只做本组件的初始化（建容器、建调度器但不启动、校验参数），跨组件的首轮加载放 `SmartInitializingSingleton.afterSingletonsInstantiated()`，此时所有单例 bean 都已就绪，又还没监听端口，失败就让 refresh 失败、Pod 起不来。
+
+**不要放 `ApplicationRunner`。** 它执行时 refresh 已完成、web 服务器已绑定端口，readiness 一过就有流量，失败再退出等于已经放进来一批空配置请求。这一点面试里问「Spring Boot 启动后想同步加载一次数据，放哪」时，答 `ApplicationRunner` 是常见但不严谨的答案。
 
 ## 三层追问
 
@@ -331,7 +381,10 @@ Bean 初始化阶段 `DataSource` 可能还没就绪，第一轮大概率失败�
 两者都行，取舍在职责边界。守护线程实现简单、延迟低（30 秒内生效），但每个进程都要重复实现一遍，还得自己处理失败重试和告警。Sidecar 把这件事收敛成一个镜像，业务进程彻底无状态，代价是多一个容器和一层网络。副本数量少、变更频繁的场景，守护线程更划算。
 
 **Q6：守护线程做配置刷新，除了「退出时被杀」还有什么坑？**
-真正难查的是**关停阶段的数据真空**。Pod 收到 `SIGTERM` 后，Spring 会先关 `DataSource`，而守护线程不受关闭序列管理，这一轮查询要么抛 `HikariDataSource has been closed`，要么返回空集合。代码如果直接 `cache = next`，配置就被刷成空，老 Pod 在摘流量的窗口里继续用空配置处理请求。修法是三条：把刷新线程做成 `SmartLifecycle` 并给一个较大的 phase（先停线程、后关池）、空结果和异常一律保留上一版、首轮同步加载失败就 fail-fast。
+真正难查的是**关停阶段的数据真空**。Pod 收到 `SIGTERM` 后，Spring 会先关 `DataSource`，而守护线程不受关闭序列管理，这一轮查询要么抛 `HikariDataSource has been closed`，要么返回空集合。代码如果直接 `cache = next`，配置就被刷成空，老 Pod 在摘流量的窗口里继续用空配置处理请求。修法是四条：把刷新线程做成 `SmartLifecycle` 并给一个较大的 phase（先停线程、后关池）、空结果和异常一律保留上一版、首轮加载放 `SmartInitializingSingleton` 而不是 `@PostConstruct`、首轮失败直接 fail-fast。
+
+**Q7：为什么首轮加载不能用 `@PostConstruct`，也不能用 `ApplicationRunner`？**
+一个太早、一个太晚。`@PostConstruct` 只保证本 bean 的依赖注入完成，容器里其他组件（动态数据源、加解密、配置元数据）可能还没初始化，第一次查库就踩空，而且它跑在 refresh 中间，失败了会把整个上下文带崩。`ApplicationRunner` 在 refresh 之后执行，web 服务器已经绑定端口、readiness 一过就进流量，失败退出时已经放进来一批请求。`SmartInitializingSingleton.afterSingletonsInstantiated()` 正好卡在中间：所有单例就绪、端口还没监听，失败就让进程起不来。`@PostConstruct` 仍有它的位置——只做本组件的初始化。
 
 ## 我的口述记录
 
