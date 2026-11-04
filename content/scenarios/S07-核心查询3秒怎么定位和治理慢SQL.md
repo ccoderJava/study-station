@@ -1,6 +1,7 @@
 ---
 id: S07
 title: "核心查询 3 秒，怎么定位和治理慢 SQL"
+graph: "慢 SQL 治理"
 kind: scenario
 nodes: [B1, B2, D5]
 primary: B1

@@ -477,7 +477,7 @@
     S1: '#2563eb', S2: '#0d9488', S3: '#7c3aed',
     S4: '#db2777', S5: '#ea580c', S6: '#64748b'
   };
-  var GF = { rep: 13500, rest: 122, spring: 0.046, anchor: 0.016, center: 0.005, damp: 0.82, maxV: 18, iter: 760 };
+  var GF = { rep: 9000, rest: 108, spring: 0.05, anchor: 0.028, center: 0.005, damp: 0.82, maxV: 18, iter: 760 };
   var gSeed = 20261103;
 
   /* 标签宽度估算：中文按一个字宽，ASCII 按 0.55，大写与空格另有系数。
@@ -576,6 +576,8 @@
       if (it.kind !== 'scenario') return;
       byKey[it.id] = {
         key: it.id, id: it.id, kind: 'scenario', name: it.title,
+        /* 图上只写短名：长标题会把布局撑散，完整标题留给悬停提示 */
+        short: it.graph || it.title,
         layer: null, color: '#f59e0b', deg: 0, cards: 0, scs: 0
       };
       gnodes.push(byKey[it.id]);
@@ -595,7 +597,7 @@
   }
 
   function graphLayout(g) {
-    var W = 960, H = 700, cx = W / 2, cy = H / 2, R = 218;
+    var W = 1080, H = 750, cx = W / 2, cy = H / 2, R = 290;
     var anchors = {};
     layers.forEach(function (L, i) {
       var a = -Math.PI / 2 + i * 2 * Math.PI / layers.length;
@@ -604,30 +606,36 @@
     var seed = gSeed;
     function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
 
-    /* 先量标签尺寸：知识点是胶囊（宽随字数），场景题是固定小方块 */
+    /* 先量标签尺寸：知识点用 11.5 号，场景题短名用 10 号、更矮，两类大小有别 */
     g.nodes.forEach(function (n) {
       if (n.kind === 'node') {
         n.w = Math.max(58, Math.round(labelW(n.name, 11.5) + 26));
         n.h = 28;
         n.deg = n.deg || 0;
       } else {
-        n.w = 38; n.h = 20;
+        n.w = Math.max(50, Math.round(labelW(n.short, 10) + 22));
+        n.h = 22;
       }
     });
 
     var scTotal = 0, scIdx = 0;
     g.nodes.forEach(function (n) { if (n.kind === 'scenario') scTotal++; });
+    /* 场景题集中在中心，知识点围在外环：两类标签分区，一眼能看出「题在内、知识点在外」。
+       中心按 4 / 7 / 9 分三圈，圈内均布、圈间错开角度，二十个标签不会挤成一坨。 */
+    var perRing = [4, 7, 9], rings = [78, 140, 198];
     g.nodes.forEach(function (n) {
       if (n.kind === 'node' && anchors[n.layer]) {
-        n.x = anchors[n.layer].x + (rnd() - 0.5) * 170;
-        n.y = anchors[n.layer].y + (rnd() - 0.5) * 170;
+        n.x = anchors[n.layer].x + (rnd() - 0.5) * 200;
+        n.y = anchors[n.layer].y + (rnd() - 0.5) * 200;
       } else {
-        /* 场景题分布在内圈，避免全挤在圆心 */
-        var a2 = -Math.PI / 2 + scIdx * 2 * Math.PI / Math.max(scTotal, 1);
-        n.ax = cx + Math.cos(a2) * 186;
-        n.ay = cy + Math.sin(a2) * 186;
-        n.x = n.ax + (rnd() - 0.5) * 90;
-        n.y = n.ay + (rnd() - 0.5) * 90;
+        var ri = 0, cum = 0;
+        while (ri < perRing.length - 1 && scIdx >= cum + perRing[ri]) { cum += perRing[ri]; ri++; }
+        var inRing = scIdx - cum;
+        var a2 = -Math.PI / 2 + inRing * 2 * Math.PI / perRing[ri] + ri * 0.5;
+        n.ax = cx + Math.cos(a2) * rings[ri];
+        n.ay = cy + Math.sin(a2) * rings[ri];
+        n.x = n.ax + (rnd() - 0.5) * 34;
+        n.y = n.ay + (rnd() - 0.5) * 34;
         scIdx++;
       }
       n.vx = 0; n.vy = 0;
@@ -663,8 +671,8 @@
           n.vx += (anchors[n.layer].x - n.x) * GF.anchor * alpha;
           n.vy += (anchors[n.layer].y - n.y) * GF.anchor * alpha;
         } else if (n.ax != null) {
-          n.vx += (n.ax - n.x) * 0.012 * alpha;
-          n.vy += (n.ay - n.y) * 0.012 * alpha;
+          n.vx += (n.ax - n.x) * 0.02 * alpha;
+          n.vy += (n.ay - n.y) * 0.02 * alpha;
         } else {
           n.vx += (cx - n.x) * GF.center * alpha;
           n.vy += (cy - n.y) * GF.center * alpha;
@@ -677,37 +685,63 @@
     }
 
     /* 横纵比归一：横向拉开、纵向压扁，让画面接近容器比例 */
-    var sx = 1.10, sy = 0.76, gx = 0, gy = 0;
+    var sx = 1.06, sy = 0.78, gx = 0, gy = 0;
     g.nodes.forEach(function (n) { gx += n.x; gy += n.y; });
     gx /= g.nodes.length; gy /= g.nodes.length;
     g.nodes.forEach(function (n) { n.x = gx + (n.x - gx) * sx; n.y = gy + (n.y - gy) * sy; });
 
     /* 去重叠：按矩形分离（胶囊宽高比大，用圆近似会让标签横向压在一起） */
-    var k, gap = 12;
-    for (k = 0; k < 220; k++) {
-      var hit = 0;
-      for (i = 0; i < g.nodes.length; i++) {
-        for (j = i + 1; j < g.nodes.length; j++) {
-          A = g.nodes[i]; B = g.nodes[j];
-          var needX = (A.w + B.w) / 2 + gap;
-          var needY = (A.h + B.h) / 2 + gap;
-          dx = B.x - A.x; dy = B.y - A.y;
-          var ox = needX - Math.abs(dx), oy = needY - Math.abs(dy);
-          if (ox > 0 && oy > 0) {
-            hit++;
-            /* 沿重叠较小的轴推开，位移最小、形状保持最好 */
-            if (ox < oy) {
-              var s1 = dx >= 0 ? 1 : -1;
-              A.x -= s1 * ox / 2; B.x += s1 * ox / 2;
-            } else {
-              var s2 = dy >= 0 ? 1 : -1;
-              A.y -= s2 * oy / 2; B.y += s2 * oy / 2;
+    var gap = 10;
+    function separate(iter) {
+      for (var k = 0; k < iter; k++) {
+        var hit = 0;
+        for (var a = 0; a < g.nodes.length; a++) {
+          for (var b = a + 1; b < g.nodes.length; b++) {
+            var A2 = g.nodes[a], B2 = g.nodes[b];
+            var needX = (A2.w + B2.w) / 2 + gap;
+            var needY = (A2.h + B2.h) / 2 + gap;
+            var ddx = B2.x - A2.x, ddy = B2.y - A2.y;
+            var ox = needX - Math.abs(ddx), oy = needY - Math.abs(ddy);
+            if (ox > 0 && oy > 0) {
+              hit++;
+              /* 沿重叠较小的轴推开，位移最小、形状保持最好 */
+              if (ox < oy) {
+                var s1 = ddx >= 0 ? 1 : -1;
+                A2.x -= s1 * ox / 2; B2.x += s1 * ox / 2;
+              } else {
+                var s2 = ddy >= 0 ? 1 : -1;
+                A2.y -= s2 * oy / 2; B2.y += s2 * oy / 2;
+              }
             }
           }
         }
+        if (!hit) break;
       }
-      if (!hit) break;
     }
+    separate(180);
+
+    /* 团簇回位：去重叠是「对半推开」，整团会一路漂到角落（Spring 那组就飘到过右下角）。
+       按层把质心拉回锚点、场景题拉回中心，再收一次重叠，保证既紧凑又不重叠。 */
+    var byLayer = {};
+    g.nodes.forEach(function (n) {
+      if (n.kind === 'node') (byLayer[n.layer] = byLayer[n.layer] || []).push(n);
+    });
+    Object.keys(byLayer).forEach(function (lid) {
+      var pts = byLayer[lid], anc = anchors[lid];
+      if (!anc || !pts.length) return;
+      var mx2 = 0, my2 = 0;
+      pts.forEach(function (n) { mx2 += n.x; my2 += n.y; });
+      mx2 /= pts.length; my2 /= pts.length;
+      pts.forEach(function (n) { n.x += (anc.x - mx2) * 0.55; n.y += (anc.y - my2) * 0.55; });
+    });
+    var scn = g.nodes.filter(function (n) { return n.kind === 'scenario'; });
+    if (scn.length) {
+      var mx3 = 0, my3 = 0;
+      scn.forEach(function (n) { mx3 += n.x; my3 += n.y; });
+      mx3 /= scn.length; my3 /= scn.length;
+      scn.forEach(function (n) { n.x += (cx - mx3) * 0.35; n.y += (cy - my3) * 0.35; });
+    }
+    separate(160);
   }
 
   function graphBBox(g, pad) {
@@ -732,17 +766,22 @@
         out.push('<line class="gline" data-sc="' + e.sc + '" data-a="' + e.a.key + '" data-b="' + e.b.key +
           '" x1="' + s[0].x.toFixed(1) + '" y1="' + s[0].y.toFixed(1) +
           '" x2="' + s[1].x.toFixed(1) + '" y2="' + s[1].y.toFixed(1) +
-          '" stroke="#d7dde6" stroke-width="1.1"/>');
+          '" stroke="#c8d2e0" stroke-width="1.15"/>');
       });
     });
     out.push('</g><g id="gnodes">');
 
     g.nodes.forEach(function (n) {
       if (n.kind === 'scenario') {
+        /* 场景题也是名称标签：橙色虚线框和知识点区分，不再出现 S01 这种编号 */
+        var sw = n.w, sh = n.h;
         out.push('<g class="gn gsc" data-key="' + n.key + '" data-kind="scenario" data-layer=""' +
           ' transform="translate(' + n.x.toFixed(1) + ',' + n.y.toFixed(1) + ')">' +
-          '<rect x="-19" y="-10" width="38" height="20" rx="10" fill="#fff7ed" stroke="' + n.color + '" stroke-width="1.6"/>' +
-          '<text y="3.6" text-anchor="middle" font-size="10" font-weight="700" fill="#b45309">' + esc(n.id) + '</text>' +
+          '<rect class="sb" x="' + (-sw / 2).toFixed(1) + '" y="' + (-sh / 2).toFixed(1) +
+          '" width="' + sw + '" height="' + sh + '" rx="' + (sh / 2) + '" fill="#fff8ef"' +
+          ' stroke="#f59e0b" stroke-width="1.3" stroke-dasharray="4 2.5"/>' +
+          '<text y="3.4" text-anchor="middle" font-size="10" font-weight="600" fill="#b45309">' +
+          esc(n.short) + '</text>' +
           '</g>');
       } else {
         /* 知识点直接写名称：底色深浅表示被关联的次数，不再是「编号 + 外部文字」 */
@@ -777,7 +816,7 @@
       '<i style="background:#f59e0b"></i>场景题</button>';
 
     var h = '<div class="hd"><h1>知识图谱</h1>' +
-      '<p>每个标签是一个知识点，颜色代表所属层，底色越深表示被越多内容关联；橙色方块是场景题，把跨层的知识点串在一起。拖动可平移，滚轮缩放，悬停看标题与关联。</p></div>' +
+      '<p>每个标签是一个知识点，颜色代表所属层，底色越深表示被越多内容关联；橙色虚线框是场景题，把跨层的知识点串在一起。拖动可平移，滚轮缩放，悬停看关联。</p></div>' +
       '<div class="gtools">' +
       '<button class="gbtn" id="gfit">适应窗口</button>' +
       '<button class="gbtn" id="gzin">＋</button>' +
@@ -826,9 +865,10 @@
     }, { passive: false });
 
     /* 平移 */
-    var drag = null;
+    var drag = null, panRaf = 0;
     svg.addEventListener('pointerdown', function (e) {
       if (e.target.closest('.gn')) return;
+      resetHi();
       drag = { x: e.clientX, y: e.clientY, tx: tf.x, ty: tf.y };
       svg.classList.add('dragging');
       svg.setPointerCapture(e.pointerId);
@@ -839,7 +879,7 @@
       var sx = vb.width / rect.width, sy = vb.height / rect.height;
       tf.x = drag.tx + (e.clientX - drag.x) * sx;
       tf.y = drag.ty + (e.clientY - drag.y) * sy;
-      apply();
+      if (!panRaf) panRaf = requestAnimationFrame(function () { panRaf = 0; apply(); });
     });
     function endDrag(e) {
       if (!drag) return;
@@ -869,53 +909,110 @@
       bindGraph(g2);
     });
 
-    /* 悬停：高亮邻居 */
+    /* 悬停：高亮邻居。
+       三件事一起做才不闪：
+       1) 事件委托到 svg，跨标签移动时直接换目标，不会先「灭」再「亮」；
+       2) 110ms 预热，指针快速扫过不触发任何重绘；
+       3) 高亮状态交给 CSS（一个 data-hi 属性 + 少量 .on 类），
+          不再逐个元素写 inline style —— 之前 53 个节点 + 四百多条线段每次都要重算样式。 */
     var nodeEls = Array.prototype.slice.call(svg.querySelectorAll('.gn'));
     var lineEls = Array.prototype.slice.call(svg.querySelectorAll('.gline'));
-    function neighbors(key) {
-      var set = {};
-      set[key] = 1;
-      g.edges.forEach(function (e) {
-        if (e.a.key === key) set[e.b.key] = 1;
-        if (e.b.key === key) set[e.a.key] = 1;
-      });
-      return set;
+    var elByKey = {}, linesByKey = {};
+    nodeEls.forEach(function (n) {
+      elByKey[n.getAttribute('data-key')] = n;
+    });
+    lineEls.forEach(function (l) {
+      var a = l.getAttribute('data-a'), b = l.getAttribute('data-b');
+      (linesByKey[a] = linesByKey[a] || []).push(l);
+      (linesByKey[b] = linesByKey[b] || []).push(l);
+    });
+
+    var hiKey = '', onNodes = [], onLines = [];
+    var pendKey = '', pendTimer = 0, leaveTimer = 0;
+    var pt = null, hoverEvt = null, hoverRaf = 0;
+
+    function clearPaint() {
+      for (var i = 0; i < onNodes.length; i++) onNodes[i].classList.remove('on');
+      for (var j = 0; j < onLines.length; j++) onLines[j].classList.remove('on');
+      onNodes = []; onLines = [];
     }
-    function clearHi() {
-      nodeEls.forEach(function (n) { n.style.opacity = ''; });
-      lineEls.forEach(function (l) { l.setAttribute('stroke', '#d7dde6'); l.setAttribute('stroke-width', '1.1'); l.style.opacity = ''; });
+    function resetHi() {
+      clearPaint();
+      svg.removeAttribute('data-hi');
+      hiKey = ''; pendKey = '';
+      clearTimeout(pendTimer);
       tip.style.display = 'none';
     }
+    function moveTip(cx2, cy2) {
+      var r = wrap.getBoundingClientRect();
+      /* 钳在容器内，靠边时不至于飘出画布；上移 20px 让提示不压住正在看的标签 */
+      var half = Math.min(130, r.width / 2);
+      var x = Math.max(half, Math.min(r.width - half, cx2 - r.left));
+      var y = Math.max(48, cy2 - r.top - 20);
+      tip.style.transform = 'translate3d(' + x + 'px,' + y + 'px,0) translate(-50%,-100%)';
+    }
+    function setHi(key) {
+      clearPaint();
+      if (!key) return;
+      var n = g.byKey[key];
+      if (!n) return;
+      hiKey = key;
+      var el = elByKey[key];
+      if (el) { el.classList.add('on'); onNodes.push(el); }
+      var ls = linesByKey[key] || [];
+      for (var i = 0; i < ls.length; i++) { ls[i].classList.add('on'); onLines.push(ls[i]); }
+      g.edges.forEach(function (e) {
+        var other = e.a.key === key ? e.b.key : e.b.key === key ? e.a.key : '';
+        if (!other) return;
+        var oel = elByKey[other];
+        if (oel && onNodes.indexOf(oel) < 0) { oel.classList.add('on'); onNodes.push(oel); }
+      });
+      svg.setAttribute('data-hi', '1');
+      tip.innerHTML = n.kind === 'scenario'
+        ? '<b>' + esc(n.name) + '</b><br>场景题 · 串起 ' + n.deg + ' 个知识点'
+        : '<b>' + esc(n.name) + '</b><br>卡片 ' + n.cards + ' 篇 · 场景题 ' + n.scs + ' 道';
+      if (pt) {
+        moveTip(pt.x, pt.y);
+        tip.style.display = 'block';
+      }
+    }
+    function handleHover() {
+      if (drag || !hoverEvt) return;
+      var t = hoverEvt.target;
+      var el = t && t.closest ? t.closest('.gn') : null;
+      var key = el ? el.getAttribute('data-key') : '';
+      if (key) {
+        clearTimeout(leaveTimer);
+        if (key === hiKey) { if (pt) moveTip(pt.x, pt.y); return; }
+        if (key === pendKey) return;
+        pendKey = key;
+        clearTimeout(pendTimer);
+        pendTimer = setTimeout(function () { if (pendKey === key) setHi(key); }, 110);
+      } else {
+        clearTimeout(pendTimer);
+        pendKey = '';
+        if (!hiKey) { tip.style.display = 'none'; return; }
+        clearTimeout(leaveTimer);
+        leaveTimer = setTimeout(resetHi, 220);
+      }
+    }
+
+    svg.addEventListener('pointermove', function (e) {
+      pt = { x: e.clientX, y: e.clientY };
+      if (drag) return;
+      hoverEvt = e;
+      if (!hoverRaf) {
+        hoverRaf = requestAnimationFrame(function () { hoverRaf = 0; handleHover(); });
+      }
+    });
+    svg.addEventListener('pointerleave', function () {
+      clearTimeout(pendTimer);
+      clearTimeout(leaveTimer);
+      pendKey = '';
+      leaveTimer = setTimeout(resetHi, 220);
+    });
+
     nodeEls.forEach(function (el) {
-      el.addEventListener('mouseenter', function (e) {
-        var key = el.getAttribute('data-key');
-        var rel = neighbors(key);
-        nodeEls.forEach(function (n2) {
-          n2.style.opacity = rel[n2.getAttribute('data-key')] ? '1' : '0.14';
-        });
-        lineEls.forEach(function (l) {
-          var on = l.getAttribute('data-a') === key || l.getAttribute('data-b') === key;
-          l.setAttribute('stroke', on ? '#f59e0b' : '#e7ebf1');
-          l.setAttribute('stroke-width', on ? '1.8' : '1');
-          l.style.opacity = on ? '1' : '0.25';
-        });
-        var n = g.byKey[key];
-        if (n) {
-          tip.innerHTML = n.kind === 'scenario'
-            ? '<b>' + esc(n.name) + '</b><br>' + esc(n.id) + ' · 关联 ' + n.deg + ' 个知识点'
-            : '<b>' + esc(n.name) + '</b><br>' + esc(n.id) + ' · 卡片 ' + n.cards + ' 篇 · 场景题 ' + n.scs + ' 道';
-          var r = wrap.getBoundingClientRect();
-          tip.style.display = 'block';
-          tip.style.left = (e.clientX - r.left) + 'px';
-          tip.style.top = (e.clientY - r.top - 14) + 'px';
-        }
-      });
-      el.addEventListener('mousemove', function (e) {
-        var r = wrap.getBoundingClientRect();
-        tip.style.left = (e.clientX - r.left) + 'px';
-        tip.style.top = (e.clientY - r.top - 14) + 'px';
-      });
-      el.addEventListener('mouseleave', clearHi);
       el.addEventListener('click', function () {
         var key = el.getAttribute('data-key');
         var kind = el.getAttribute('data-kind');

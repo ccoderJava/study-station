@@ -524,6 +524,7 @@ def build_data():
                    "excerpt": n["_excerpt"], "cards": n["cards"],
                    "scenarios": n["scenarios"]} for n in nodes],
         "items": [{"id": c["id"], "kind": c["kind"], "title": c["title"],
+                   "graph": c.get("graph", ""),
                    "nodes": c["nodes"], "primary": c.get("primary", c["nodes"][0] if c["nodes"] else ""),
                    "direction": c.get("direction", "未分类"), "event": c.get("event", "未分类"),
                    "project": c.get("project", ""), "level": c["level"],
