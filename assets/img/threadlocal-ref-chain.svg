@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 418" width="100%" role="img">
+<title>ThreadLocal 的引用链：key 弱引用、value 强引用，泄漏由线程生命周期决定</title>
+<desc>线程池里的线程持有 ThreadLocalMap，Map 的 Entry 数组里 key 是 ThreadLocal 的弱引用、value 是业务对象的强引用。key 被 GC 后 value 仍在，线程不退出就一直可达；线程被复用则下一个请求读到上一个请求的值。</desc>
+<defs>
+  <marker id="tl1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#9db4d4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  <marker id="tl1r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#d08d85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+<g font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',Arial,sans-serif">
+
+  <text x="40" y="30" font-size="13.5" fill="#6b7684">① 数据存在线程身上：线程活着，map 就活着</text>
+
+  <g>
+    <rect x="40" y="46" width="186" height="60" rx="9" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="133" y="70" font-size="14.5" fill="#16324f" text-anchor="middle">线程池中的 Thread</text>
+    <text x="133" y="90" font-size="12.5" fill="#63707f" text-anchor="middle">core=200，用完不退出</text>
+  </g>
+  <path d="M229 76L277 76" fill="none" stroke="#9db4d4" stroke-width="1.5" marker-end="url(#tl1)"/>
+  <g>
+    <rect x="280" y="46" width="180" height="60" rx="9" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="370" y="70" font-size="14.5" fill="#16324f" text-anchor="middle">Thread 对象</text>
+    <text x="370" y="90" font-size="12.5" fill="#63707f" text-anchor="middle">threadLocals 字段</text>
+  </g>
+  <path d="M463 76L511 76" fill="none" stroke="#9db4d4" stroke-width="1.5" marker-end="url(#tl1)"/>
+  <g>
+    <rect x="514" y="46" width="180" height="60" rx="9" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="604" y="70" font-size="14.5" fill="#16324f" text-anchor="middle">ThreadLocalMap</text>
+    <text x="604" y="90" font-size="12.5" fill="#63707f" text-anchor="middle">每个线程独一份</text>
+  </g>
+  <path d="M697 76L745 76" fill="none" stroke="#9db4d4" stroke-width="1.5" marker-end="url(#tl1)"/>
+  <g>
+    <rect x="748" y="46" width="112" height="60" rx="9" fill="#e3eefc" stroke="#9dbcf0" stroke-width="1.2"/>
+    <text x="804" y="70" font-size="14.5" fill="#12385f" text-anchor="middle">Entry[]</text>
+    <text x="804" y="90" font-size="12.5" fill="#3d5f86" text-anchor="middle">初始 16 个槽</text>
+  </g>
+
+  <path d="M804 108L804 136" fill="none" stroke="#9db4d4" stroke-width="1.5" marker-end="url(#tl1)"/>
+  <text x="812" y="130" font-size="12" fill="#9aa4b2">展开一个槽</text>
+
+  <text x="40" y="164" font-size="13.5" fill="#6b7684">② 一个 Entry 长什么样：key 是弱引用，value 是强引用</text>
+
+  <g>
+    <rect x="40" y="178" width="60" height="112" rx="8" fill="#f2f5fb" stroke="#dfe4ee" stroke-width="1"/>
+    <text x="70" y="196" font-size="11.5" fill="#9aa4b2" text-anchor="middle">槽位</text>
+    <text x="70" y="224" font-size="14" fill="#16324f" text-anchor="middle">3</text>
+    <text x="70" y="282" font-size="14" fill="#8a3a30" text-anchor="middle">7</text>
+  </g>
+
+  <g>
+    <rect x="104" y="178" width="230" height="54" rx="8" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="118" y="200" font-size="12.5" fill="#63707f">key → ThreadLocal#ctx</text>
+    <text x="118" y="220" font-size="12" fill="#9aa4b2">WeakReference&lt;ThreadLocal&gt;</text>
+  </g>
+  <g>
+    <rect x="104" y="236" width="230" height="54" rx="8" fill="#fdf1f0" stroke="#f0c8c4" stroke-width="1"/>
+    <text x="118" y="258" font-size="12.5" fill="#8a3a30">key → null（对象已被 GC）</text>
+    <text x="118" y="278" font-size="12" fill="#a1706a">Entry 本身还在，只是 key 断了</text>
+  </g>
+
+  <text x="363" y="199" font-size="10.5" fill="#9aa4b2" text-anchor="middle">弱引用</text>
+  <path d="M336 205L386 205" fill="none" stroke="#c3cede" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#tl1)"/>
+  <text x="363" y="257" font-size="10.5" fill="#a1706a" text-anchor="middle">强引用</text>
+  <path d="M336 263L386 263" fill="none" stroke="#d08d85" stroke-width="1.6" marker-end="url(#tl1r)"/>
+
+  <g>
+    <rect x="390" y="178" width="470" height="54" rx="8" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="404" y="200" font-size="12.5" fill="#16324f">value → TenantContext{tenantId, traceId, userId}</text>
+    <text x="404" y="220" font-size="12" fill="#63707f">正常使用：请求结束时 remove，引用断开，可回收</text>
+  </g>
+  <g>
+    <rect x="390" y="236" width="470" height="54" rx="8" fill="#fdf1f0" stroke="#f0c8c4" stroke-width="1.2"/>
+    <text x="404" y="258" font-size="12.5" fill="#8a3a30">value → 上一个请求的 UserContext（大对象）</text>
+    <text x="404" y="278" font-size="12" fill="#a1706a">僵尸 entry：只有下一次 get / set / remove 探测到才会清</text>
+  </g>
+
+  <line x1="40" y1="312" x2="860" y2="312" stroke="#e3e7ee" stroke-width="1" stroke-dasharray="4 4"/>
+
+  <g>
+    <rect x="40" y="330" width="406" height="72" rx="9" fill="#fdf1f0" stroke="#f0c8c4" stroke-width="1"/>
+    <text x="56" y="353" font-size="13.5" fill="#8a3a30">泄漏：线程不退 → map 不回收</text>
+    <text x="56" y="374" font-size="12.5" fill="#a1706a">→ 僵尸 value 常驻老年代，堆一点点被吃掉</text>
+    <text x="56" y="392" font-size="12.5" fill="#a1706a">Tomcat 热部署时还能把整个 ClassLoader 吊住</text>
+  </g>
+  <g>
+    <rect x="454" y="330" width="406" height="72" rx="9" fill="#fdf1f0" stroke="#f0c8c4" stroke-width="1"/>
+    <text x="470" y="353" font-size="13.5" fill="#8a3a30">串号：线程被复用 → 旧值还在</text>
+    <text x="470" y="374" font-size="12.5" fill="#a1706a">→ 下一个请求 get 到上一个请求的租户 ID</text>
+    <text x="470" y="392" font-size="12.5" fill="#a1706a">→ 跨租户读到别人的数据，比泄漏严重得多</text>
+  </g>
+
+</g>
+</svg>

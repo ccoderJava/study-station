@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" width="100%" role="img">
+<title>ThreadLocalMap 的 get / set 探测流程</title>
+<desc>用 hash 定位槽位后线性探测：空槽直接插入或返回初始值，key 命中则读写，key 为 null 说明是陈旧 entry，先清理再继续；探测次数和扩容阈值 len×2/3 决定了它为什么适合 entry 很少的场景。</desc>
+<defs>
+  <marker id="tl3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#9db4d4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  <marker id="tl3b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#7f9ec6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+<g font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',Arial,sans-serif">
+
+  <text x="40" y="32" font-size="13.5" fill="#6b7684">get / set / remove 走的是同一套探测逻辑，区别只在命中之后做什么</text>
+
+  <g>
+    <rect x="40" y="52" width="820" height="56" rx="9" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="58" y="76" font-size="13.5" fill="#16324f">① 定位槽位：i = threadLocalHashCode &amp; (len - 1)</text>
+    <text x="58" y="96" font-size="12.5" fill="#63707f">hash 由黄金分割步长 0x61c88647 递增，同一个线程里的多个 ThreadLocal 分布均匀，冲突很少</text>
+  </g>
+
+  <g>
+    <rect x="40" y="122" width="820" height="56" rx="9" fill="#f1f8f3" stroke="#cfe6d8" stroke-width="1"/>
+    <text x="58" y="146" font-size="13.5" fill="#2f6b46">② tab[i] 为空槽 → 没存过</text>
+    <text x="58" y="166" font-size="12.5" fill="#4d7d63">set 把 Entry 放进这个槽；get 走 setInitialValue()，返回 initialValue() 的结果（默认 null）</text>
+  </g>
+
+  <g>
+    <rect x="40" y="192" width="820" height="56" rx="9" fill="#f1f8f3" stroke="#cfe6d8" stroke-width="1"/>
+    <text x="58" y="216" font-size="13.5" fill="#2f6b46">③ tab[i].key == 目标 → 命中</text>
+    <text x="58" y="236" font-size="12.5" fill="#4d7d63">get 直接返回 value；set 覆盖 value，到此结束；remove 则 clear + 清理</text>
+  </g>
+
+  <g>
+    <rect x="40" y="262" width="820" height="56" rx="9" fill="#fdf1f0" stroke="#f0c8c4" stroke-width="1.2"/>
+    <text x="58" y="286" font-size="13.5" fill="#8a3a30">④ tab[i].key == null → 陈旧槽（ThreadLocal 已被 GC）</text>
+    <text x="58" y="306" font-size="12.5" fill="#a1706a">expungeStaleEntry：把僵尸 value 置 null（这才是真正断开泄漏链的那一下），并顺带 rehash 后面的连续段</text>
+  </g>
+
+  <g>
+    <rect x="40" y="332" width="820" height="56" rx="9" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="58" y="356" font-size="13.5" fill="#16324f">⑤ 以上都不是 → i = nextIndex(i, len)，回到 ② 重新判断</text>
+    <text x="58" y="376" font-size="12.5" fill="#63707f">开放寻址 + 线性探测，不是链表。因为每个线程的 entry 通常只有几个，链表的结构开销不值得</text>
+  </g>
+
+  <path d="M860 360C880 360 880 150 866 150" fill="none" stroke="#7f9ec6" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#tl3b)"/>
+
+  <line x1="40" y1="410" x2="860" y2="410" stroke="#e3e7ee" stroke-width="1" stroke-dasharray="4 4"/>
+
+  <text x="40" y="434" font-size="12.5" fill="#63707f">扩容：size ≥ threshold（len × 2/3，16 槽即 10 个）→ rehash：先清一遍陈旧槽，再把容量翻倍</text>
+  <text x="40" y="456" font-size="12.5" fill="#9aa4b2">关键点：以上清理全部发生在「下一次读或写」上——线程不再碰这个 map，僵尸 entry 就一直躺着</text>
+
+</g>
+</svg>
