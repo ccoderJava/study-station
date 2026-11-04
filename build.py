@@ -64,8 +64,26 @@ def inline(s):
     s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
     s = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", s)
     s = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<em>\1</em>", s)
-    s = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r'<a href="\2" target="_blank" rel="noopener">\1</a>', s)
+    s = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)", r'<img src="\2" alt="\1" loading="lazy">', s)
+    s = re.sub(r"(?<!!)\[([^\]]+)\]\((https?://[^)]+)\)", r'<a href="\2" target="_blank" rel="noopener">\1</a>', s)
     return s
+
+
+def inline_svg(src):
+    """把本地 svg 原样内联，返回 svg 源码；不是 svg 或找不到则返回空串。
+
+    file:// 下 <img src="...svg"> 会被 Chrome 的源限制拦住（naturalWidth=0），
+    内联是唯一在离线场景稳定显示的办法。
+    """
+    if not src.lower().endswith(".svg"):
+        return ""
+    name = os.path.basename(src)
+    for p in (os.path.join(THEME, "img", name), os.path.join(BASE, src)):
+        if os.path.exists(p):
+            s = open(p, encoding="utf-8").read()
+            s = re.sub(r"<\?xml[^>]*\?>", "", s).strip()
+            return re.sub(r"<svg\s", '<svg class="figsvg" ', s, count=1)
+    return ""
 
 
 def render_items(items):
@@ -198,6 +216,19 @@ def md_to_html(md, hid_prefix=None):
             buf.append(cs)
             i += 1
         if buf:
+            # 整段只有一个图片 → 出 figure，alt 当图注
+            if len(buf) == 1:
+                mi = re.fullmatch(r"!\[([^\]]*)\]\(([^)\s]+)\)", buf[0])
+                if mi:
+                    alt, src = mi.group(1), mi.group(2)
+                    cap = '<figcaption>%s</figcaption>' % html.escape(alt) if alt else ""
+                    svg = inline_svg(src)
+                    if svg:
+                        out.append('<figure class="fig">%s%s</figure>' % (svg, cap))
+                    else:
+                        out.append('<figure><img src="%s" alt="%s" loading="lazy">%s</figure>'
+                                   % (src, html.escape(alt), cap))
+                    continue
             text = ""
             for k, raw in enumerate(buf):
                 if k and re.search(r"[A-Za-z0-9]$", buf[k - 1]) and re.match(r"^[A-Za-z0-9]", raw):
@@ -321,6 +352,16 @@ def write_site(data):
         if os.path.exists(src):
             open(os.path.join(ASSETS, name), "w", encoding="utf-8").write(
                 open(src, encoding="utf-8").read())
+
+    # 主题内的插图（SVG 等）原样拷进 assets/img
+    img_src = os.path.join(THEME, "img")
+    if os.path.isdir(img_src):
+        img_dst = os.path.join(ASSETS, "img")
+        os.makedirs(img_dst, exist_ok=True)
+        for name in sorted(os.listdir(img_src)):
+            p = os.path.join(img_src, name)
+            if os.path.isfile(p):
+                open(os.path.join(img_dst, name), "wb").write(open(p, "rb").read())
 
     payload = "window.KB=" + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";"
     open(os.path.join(ASSETS, "data.js"), "w", encoding="utf-8").write(payload)

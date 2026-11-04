@@ -205,10 +205,17 @@ python3 build.py --check
 `build.py` 对每个 md 文件：
 
 1. 解析 front-matter（一个 YAML 子集：`key: value` / `key: "value"` / `key: [a, b]`）
-2. 把正文 markdown 渲染成 HTML（支持标题、列表、表格、引用、代码块、行内样式）
+2. 把正文 markdown 渲染成 HTML（支持标题、列表、表格、引用、代码块、行内样式、插图）
 3. 建立反向索引：节点 → 关联的卡片和场景题
 4. 输出 `assets/data.js`（全部内容 + 索引）和 `index.html`（壳）
 5. 打印覆盖率统计
+
+**插图**：正文里写 `![图注](assets/img/xxx.svg)`，方括号里的文字就是图注。
+
+- `.svg` 会在构建时被**内联**进 HTML，不是 `<img>`。原因很实际：`file://` 打开时 Chrome 不让 `<img>` 加载本地 svg（`naturalWidth` 恒为 0），内联是离线场景唯一稳定的办法。
+- 源文件放 `theme/img/`，构建时同步拷一份到 `assets/img/`（给 http 部署用）。**不要直接改 `assets/img/`**，它是产物。
+- 插图单独成段（上下留空行）才会渲染成 `<figure>`；和文字混在一行会退化成一个 `<p>` 里的 `<img>`。
+- 位图（png / jpg）走普通 `<img>`，同样放 `theme/img/`。
 
 **没有任何第三方依赖**，不需要 npm、不需要装包，Python 3 自带环境就能跑。
 
@@ -220,3 +227,5 @@ python3 build.py --check
 - 一张卡片最多关联 3~4 个知识点，多了说明这张卡该拆
 - 节点 id 一旦确定不要改（卡片引用了它）；新增节点用当前层内最大编号 +1
 - `status` 是内容成熟度（我写得够不够全），学习进度由站点在浏览器里单独记录，两者不是一回事
+- 插图优先用 svg：内联、体积小、放大不糊；源文件统一放 `theme/img/`，命名用 `内容主题-用途.svg`
+- ASCII 图（```text 代码块）和 svg 插图不重复画同一件事：svg 给全貌，ascii 给可复制的细节

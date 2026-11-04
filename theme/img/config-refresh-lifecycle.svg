@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 462" width="100%" role="img">
+<title>配置热更新三段时序：启动期、运行期、关停期</title>
+<desc>启动期首轮加载只能放在所有单例就绪之后、端口监听之前；运行期拉版本号、拉全量探活、原子替换，空结果或异常都保留上一版；关停期先摘流量，再停刷新线程，最后关连接池。</desc>
+<defs>
+  <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#9db4d4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+<g font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',Arial,sans-serif">
+
+  <text x="65" y="34" font-size="13.5" fill="#6b7684">启动期 · 保证起来就有配置</text>
+
+  <g>
+    <rect x="65" y="52" width="220" height="62" rx="9" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="175" y="79" font-size="15" fill="#16324f" text-anchor="middle">@PostConstruct</text>
+    <text x="175" y="99" font-size="13" fill="#63707f" text-anchor="middle">只保证本组件就绪</text>
+  </g>
+  <path d="M288 83L336 83" fill="none" stroke="#9db4d4" stroke-width="1.5" marker-end="url(#ah)"/>
+  <g>
+    <rect x="340" y="52" width="220" height="62" rx="9" fill="#e3eefc" stroke="#9dbcf0" stroke-width="1.2"/>
+    <text x="450" y="79" font-size="15" fill="#12385f" text-anchor="middle">所有单例就绪</text>
+    <text x="450" y="99" font-size="13" fill="#3d5f86" text-anchor="middle">首轮加载只能放这</text>
+  </g>
+  <path d="M563 83L611 83" fill="none" stroke="#9db4d4" stroke-width="1.5" marker-end="url(#ah)"/>
+  <g>
+    <rect x="615" y="52" width="220" height="62" rx="9" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="725" y="79" font-size="15" fill="#16324f" text-anchor="middle">Lifecycle.start</text>
+    <text x="725" y="99" font-size="13" fill="#63707f" text-anchor="middle">端口开始监听</text>
+  </g>
+  <text x="725" y="128" font-size="12.5" fill="#9aa4b2" text-anchor="middle">流量从这里进来</text>
+
+  <line x1="65" y1="146" x2="835" y2="146" stroke="#e3e7ee" stroke-width="1" stroke-dasharray="4 4"/>
+
+  <text x="65" y="170" font-size="13.5" fill="#6b7684">运行期 · 保证刷新失败不降级</text>
+
+  <g>
+    <rect x="65" y="188" width="220" height="62" rx="9" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="175" y="215" font-size="15" fill="#16324f" text-anchor="middle">拉版本号</text>
+    <text x="175" y="235" font-size="13" fill="#63707f" text-anchor="middle">30 秒一次，超时就放弃</text>
+  </g>
+  <path d="M288 219L336 219" fill="none" stroke="#9db4d4" stroke-width="1.5" marker-end="url(#ah)"/>
+  <g>
+    <rect x="340" y="188" width="220" height="62" rx="9" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="450" y="215" font-size="15" fill="#16324f" text-anchor="middle">拉全量 + 探活</text>
+    <text x="450" y="235" font-size="13" fill="#63707f" text-anchor="middle">版本变了才拉</text>
+  </g>
+  <path d="M563 219L611 219" fill="none" stroke="#9db4d4" stroke-width="1.5" marker-end="url(#ah)"/>
+  <g>
+    <rect x="615" y="188" width="220" height="62" rx="9" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="725" y="215" font-size="15" fill="#16324f" text-anchor="middle">原子替换</text>
+    <text x="725" y="235" font-size="13" fill="#63707f" text-anchor="middle">旧池延迟 5 分钟关</text>
+  </g>
+
+  <path d="M450 253L450 273" fill="none" stroke="#e0a8a2" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+  <g>
+    <rect x="340" y="276" width="220" height="50" rx="9" fill="#fdf1f0" stroke="#f0c8c4" stroke-width="1"/>
+    <text x="450" y="298" font-size="14.5" fill="#8a3a30" text-anchor="middle">保留上一版</text>
+    <text x="450" y="315" font-size="12.5" fill="#a1706a" text-anchor="middle">空结果 / 异常 / 预热失败</text>
+  </g>
+
+  <line x1="65" y1="348" x2="835" y2="348" stroke="#e3e7ee" stroke-width="1" stroke-dasharray="4 4"/>
+
+  <text x="65" y="372" font-size="13.5" fill="#6b7684">关停期 · 保证停的时候不查库</text>
+
+  <g>
+    <rect x="65" y="390" width="220" height="52" rx="9" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="175" y="412" font-size="14.5" fill="#16324f" text-anchor="middle">摘流量 + preStop</text>
+    <text x="175" y="430" font-size="12.5" fill="#63707f" text-anchor="middle">新请求不再进来</text>
+  </g>
+  <path d="M288 416L336 416" fill="none" stroke="#9db4d4" stroke-width="1.5" marker-end="url(#ah)"/>
+  <g>
+    <rect x="340" y="390" width="220" height="52" rx="9" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="450" y="412" font-size="14.5" fill="#16324f" text-anchor="middle">SIGTERM</text>
+    <text x="450" y="430" font-size="12.5" fill="#63707f" text-anchor="middle">按 phase 先停刷新线程</text>
+  </g>
+  <path d="M563 416L611 416" fill="none" stroke="#9db4d4" stroke-width="1.5" marker-end="url(#ah)"/>
+  <g>
+    <rect x="615" y="390" width="220" height="52" rx="9" fill="#f6f9ff" stroke="#cfdffa" stroke-width="1"/>
+    <text x="725" y="412" font-size="14.5" fill="#16324f" text-anchor="middle">关连接池</text>
+    <text x="725" y="430" font-size="12.5" fill="#63707f" text-anchor="middle">线程已停，不会查库</text>
+  </g>
+
+</g>
+</svg>

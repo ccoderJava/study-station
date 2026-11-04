@@ -306,6 +306,19 @@ article hr{border:none;border-top:1px solid var(--line);margin:24px 0}
 article table{border-collapse:collapse;width:100%;font-size:13.5px}
 article th,article td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
 article th{background:var(--panel2);font-weight:600;color:#111c28}
+article figure{margin:20px 0 22px}
+article figure.fig{
+  border:1px solid var(--line);border-radius:10px;background:#fff;
+  padding:16px 18px 12px;overflow-x:auto;
+}
+article figure .figsvg{display:block;width:100%;height:auto;min-width:680px}
+article figure img{
+  display:block;width:100%;height:auto;background:#fff;
+  border:1px solid var(--line);border-radius:10px;
+}
+article figcaption{
+  margin-top:9px;font-size:12.5px;line-height:1.6;color:var(--faint);text-align:center;
+}
 article strong{color:#0f1720;font-weight:600}
 article a{border-bottom:1px solid var(--acc-line)}
 
