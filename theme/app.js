@@ -477,8 +477,91 @@
     S1: '#2563eb', S2: '#0d9488', S3: '#7c3aed',
     S4: '#db2777', S5: '#ea580c', S6: '#64748b'
   };
-  var GF = { rep: 11500, rest: 128, spring: 0.03, anchor: 0.016, center: 0.005, damp: 0.82, maxV: 18, iter: 620 };
+  var GF = { rep: 13500, rest: 122, spring: 0.046, anchor: 0.016, center: 0.005, damp: 0.82, maxV: 18, iter: 760 };
   var gSeed = 20261103;
+
+  /* 标签宽度估算：中文按一个字宽，ASCII 按 0.55，大写与空格另有系数。
+     不能靠 getBBox（节点还没进 DOM），估算够用且布局稳定。 */
+  function labelW(s, size) {
+    var w = 0;
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i), ch = s.charAt(i);
+      if (c > 255) w += size;
+      else if (c === 32) w += size * 0.34;
+      else if (ch >= 'A' && ch <= 'Z') w += size * 0.64;
+      else w += size * 0.55;
+    }
+    return w;
+  }
+
+  /* 从节点中心指向 (tx,ty) 的射线与节点边框的交点：线要停在标签边上，不能压字 */
+  function clipPt(n, tx, ty) {
+    var dx = tx - n.x, dy = ty - n.y;
+    var adx = Math.abs(dx), ady = Math.abs(dy);
+    if (adx < 0.01 && ady < 0.01) return { x: n.x, y: n.y };
+    var hw = (n.w || 16) / 2, hh = (n.h || 16) / 2;
+    var t = Math.min(adx > 0.01 ? hw / adx : 1e9, ady > 0.01 ? hh / ady : 1e9);
+    return { x: n.x + dx * t, y: n.y + dy * t };
+  }
+
+  /* 线段与矩形的相交参数区间（Liang-Barsky），没交点返回 null */
+  function segRect(x1, y1, x2, y2, rc) {
+    var t0 = 0, t1 = 1, dx = x2 - x1, dy = y2 - y1;
+    var p = [-dx, dx, -dy, dy];
+    var q = [x1 - rc.x1, rc.x2 - x1, y1 - rc.y1, rc.y2 - y1];
+    for (var i = 0; i < 4; i++) {
+      if (p[i] === 0) { if (q[i] < 0) return null; }
+      else {
+        var r = q[i] / p[i];
+        if (p[i] < 0) { if (r > t1) return null; if (r > t0) t0 = r; }
+        else { if (r < t0) return null; if (r < t1) t1 = r; }
+      }
+    }
+    return [t0, t1];
+  }
+
+  /* 把层色按比例混白：得到不透明的浅色底，底下的连线不会透上来 */
+  function tint(hex, t) {
+    var r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+    function m(v) { return Math.round(255 - (255 - v) * t); }
+    return 'rgb(' + m(r) + ',' + m(g) + ',' + m(b) + ')';
+  }
+
+  /* 一条边可能穿过别的标签：按标签矩形切成若干段，只画露在外面的部分 */
+  function edgeSegs(e, g) {
+    var p1 = clipPt(e.a, e.b.x, e.b.y), p2 = clipPt(e.b, e.a.x, e.a.y);
+    var cuts = [];
+    g.nodes.forEach(function (n) {
+      if (n === e.a || n === e.b) return;
+      var iv = segRect(p1.x, p1.y, p2.x, p2.y, {
+        x1: n.x - n.w / 2, x2: n.x + n.w / 2,
+        y1: n.y - n.h / 2, y2: n.y + n.h / 2
+      });
+      if (iv && iv[1] - iv[0] > 0.0005) cuts.push(iv);
+    });
+    var spans = [];
+    if (!cuts.length) {
+      spans.push([0, 1]);
+    } else {
+      cuts.sort(function (a, b) { return a[0] - b[0]; });
+      var cur = 0;
+      cuts.forEach(function (iv) {
+        if (iv[0] > cur) spans.push([cur, Math.min(iv[0], 1)]);
+        if (iv[1] > cur) cur = iv[1];
+      });
+      if (cur < 1) spans.push([cur, 1]);
+    }
+    /* 每段两端各缩 1.8px：不然端点刚好压在标签边上，看起来像连进去了 */
+    var len = Math.sqrt((p2.x - p1.x) * (p2.x - p1.x) + (p2.y - p1.y) * (p2.y - p1.y)) || 1;
+    var pad = 1.8 / len;
+    return spans.filter(function (s) { return s[1] - s[0] > 0.002; }).map(function (s) {
+      var t0 = Math.min(s[0] + pad, s[1]), t1 = Math.max(s[1] - pad, s[0]);
+      return [
+        { x: p1.x + (p2.x - p1.x) * t0, y: p1.y + (p2.y - p1.y) * t0 },
+        { x: p1.x + (p2.x - p1.x) * t1, y: p1.y + (p2.y - p1.y) * t1 }
+      ];
+    });
+  }
 
   function graphModel() {
     var gnodes = [], byKey = {}, edges = [];
@@ -512,7 +595,7 @@
   }
 
   function graphLayout(g) {
-    var W = 1040, H = 740, cx = W / 2, cy = H / 2, R = 252;
+    var W = 960, H = 700, cx = W / 2, cy = H / 2, R = 218;
     var anchors = {};
     layers.forEach(function (L, i) {
       var a = -Math.PI / 2 + i * 2 * Math.PI / layers.length;
@@ -520,23 +603,34 @@
     });
     var seed = gSeed;
     function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+
+    /* 先量标签尺寸：知识点是胶囊（宽随字数），场景题是固定小方块 */
+    g.nodes.forEach(function (n) {
+      if (n.kind === 'node') {
+        n.w = Math.max(58, Math.round(labelW(n.name, 11.5) + 26));
+        n.h = 28;
+        n.deg = n.deg || 0;
+      } else {
+        n.w = 38; n.h = 20;
+      }
+    });
+
     var scTotal = 0, scIdx = 0;
     g.nodes.forEach(function (n) { if (n.kind === 'scenario') scTotal++; });
     g.nodes.forEach(function (n) {
       if (n.kind === 'node' && anchors[n.layer]) {
-        n.x = anchors[n.layer].x + (rnd() - 0.5) * 130;
-        n.y = anchors[n.layer].y + (rnd() - 0.5) * 130;
+        n.x = anchors[n.layer].x + (rnd() - 0.5) * 170;
+        n.y = anchors[n.layer].y + (rnd() - 0.5) * 170;
       } else {
         /* 场景题分布在内圈，避免全挤在圆心 */
         var a2 = -Math.PI / 2 + scIdx * 2 * Math.PI / Math.max(scTotal, 1);
-        n.ax = cx + Math.cos(a2) * 212;
-        n.ay = cy + Math.sin(a2) * 212;
-        n.x = n.ax + (rnd() - 0.5) * 70;
-        n.y = n.ay + (rnd() - 0.5) * 70;
+        n.ax = cx + Math.cos(a2) * 186;
+        n.ay = cy + Math.sin(a2) * 186;
+        n.x = n.ax + (rnd() - 0.5) * 90;
+        n.y = n.ay + (rnd() - 0.5) * 90;
         scIdx++;
       }
       n.vx = 0; n.vy = 0;
-      n.r = n.kind === 'node' ? 12 + Math.min(n.deg * 2, 16) : 19;
     });
 
     var t, i, j, A, B, dx, dy, d2, d, f, ux, uy;
@@ -583,39 +677,46 @@
     }
 
     /* 横纵比归一：横向拉开、纵向压扁，让画面接近容器比例 */
-    var sx = 1.28, sy = 0.70, gx = 0, gy = 0;
+    var sx = 1.10, sy = 0.76, gx = 0, gy = 0;
     g.nodes.forEach(function (n) { gx += n.x; gy += n.y; });
     gx /= g.nodes.length; gy /= g.nodes.length;
     g.nodes.forEach(function (n) { n.x = gx + (n.x - gx) * sx; n.y = gy + (n.y - gy) * sy; });
 
-    /* 去重叠：把相互压住的点推开 */
-    var k;
-    for (k = 0; k < 70; k++) {
+    /* 去重叠：按矩形分离（胶囊宽高比大，用圆近似会让标签横向压在一起） */
+    var k, gap = 12;
+    for (k = 0; k < 220; k++) {
+      var hit = 0;
       for (i = 0; i < g.nodes.length; i++) {
         for (j = i + 1; j < g.nodes.length; j++) {
           A = g.nodes[i]; B = g.nodes[j];
-          var need = (A.r || 10) + (B.r || 10) + 22;
+          var needX = (A.w + B.w) / 2 + gap;
+          var needY = (A.h + B.h) / 2 + gap;
           dx = B.x - A.x; dy = B.y - A.y;
-          d2 = dx * dx + dy * dy;
-          if (d2 < 0.01) { dx = 0.6; dy = 0.8; d2 = 1; }
-          d = Math.sqrt(d2);
-          if (d < need) {
-            var push = (need - d) / 2;
-            A.x -= dx / d * push; A.y -= dy / d * push;
-            B.x += dx / d * push; B.y += dy / d * push;
+          var ox = needX - Math.abs(dx), oy = needY - Math.abs(dy);
+          if (ox > 0 && oy > 0) {
+            hit++;
+            /* 沿重叠较小的轴推开，位移最小、形状保持最好 */
+            if (ox < oy) {
+              var s1 = dx >= 0 ? 1 : -1;
+              A.x -= s1 * ox / 2; B.x += s1 * ox / 2;
+            } else {
+              var s2 = dy >= 0 ? 1 : -1;
+              A.y -= s2 * oy / 2; B.y += s2 * oy / 2;
+            }
           }
         }
       }
+      if (!hit) break;
     }
   }
 
   function graphBBox(g, pad) {
     var x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
     g.nodes.forEach(function (n) {
-      x1 = Math.min(x1, n.x - n.r - 76);
-      x2 = Math.max(x2, n.x + n.r + 76);
-      y1 = Math.min(y1, n.y - n.r - 42);
-      y2 = Math.max(y2, n.y + n.r + 42);
+      x1 = Math.min(x1, n.x - n.w / 2);
+      x2 = Math.max(x2, n.x + n.w / 2);
+      y1 = Math.min(y1, n.y - n.h / 2);
+      y2 = Math.max(y2, n.y + n.h / 2);
     });
     return { x: x1 - pad, y: y1 - pad, w: (x2 - x1) + pad * 2, h: (y2 - y1) + pad * 2 };
   }
@@ -627,39 +728,33 @@
     out.push('<g id="gpan">');
     out.push('<g id="gedges">');
     g.edges.forEach(function (e) {
-      out.push('<line class="gline" data-sc="' + e.sc + '" data-a="' + e.a.key + '" data-b="' + e.b.key +
-        '" x1="' + e.a.x.toFixed(1) + '" y1="' + e.a.y.toFixed(1) +
-        '" x2="' + e.b.x.toFixed(1) + '" y2="' + e.b.y.toFixed(1) +
-        '" stroke="#d7dde6" stroke-width="1.1"/>');
+      edgeSegs(e, g).forEach(function (s) {
+        out.push('<line class="gline" data-sc="' + e.sc + '" data-a="' + e.a.key + '" data-b="' + e.b.key +
+          '" x1="' + s[0].x.toFixed(1) + '" y1="' + s[0].y.toFixed(1) +
+          '" x2="' + s[1].x.toFixed(1) + '" y2="' + s[1].y.toFixed(1) +
+          '" stroke="#d7dde6" stroke-width="1.1"/>');
+      });
     });
     out.push('</g><g id="gnodes">');
 
-    var mx = 0, my = 0;
-    g.nodes.forEach(function (n) { mx += n.x; my += n.y; });
-    mx /= g.nodes.length; my /= g.nodes.length;
-
     g.nodes.forEach(function (n) {
-      /* 标签朝圆心外侧放，减少互相压字 */
-      var ox = n.x - mx, oy = n.y - my;
-      var od = Math.sqrt(ox * ox + oy * oy) || 1;
-      var ux = ox / od, uy = oy / od;
-      var anchor = ux > 0.35 ? 'start' : ux < -0.35 ? 'end' : 'middle';
-      var off = (n.r || 9) + 15;
-      var lx = ux * off, ly = uy * off + 4;
-
       if (n.kind === 'scenario') {
         out.push('<g class="gn gsc" data-key="' + n.key + '" data-kind="scenario" data-layer=""' +
           ' transform="translate(' + n.x.toFixed(1) + ',' + n.y.toFixed(1) + ')">' +
-          '<rect x="-18" y="-9.5" width="36" height="19" rx="9.5" fill="#fff7ed" stroke="' + n.color + '" stroke-width="1.6"/>' +
+          '<rect x="-19" y="-10" width="38" height="20" rx="10" fill="#fff7ed" stroke="' + n.color + '" stroke-width="1.6"/>' +
           '<text y="3.6" text-anchor="middle" font-size="10" font-weight="700" fill="#b45309">' + esc(n.id) + '</text>' +
           '</g>');
       } else {
+        /* 知识点直接写名称：底色深浅表示被关联的次数，不再是「编号 + 外部文字」 */
+        var w = n.w, h = n.h;
+        var fill = tint(n.color, n.deg >= 3 ? 0.2 : n.deg >= 1 ? 0.14 : 0.09);
         out.push('<g class="gn" data-key="' + n.key + '" data-kind="node" data-layer="' + n.layer + '"' +
           ' transform="translate(' + n.x.toFixed(1) + ',' + n.y.toFixed(1) + ')">' +
-          '<circle r="' + n.r.toFixed(1) + '" fill="' + n.color + '1f" stroke="' + n.color + '" stroke-width="1.6"/>' +
-          '<text y="3.8" text-anchor="middle" font-size="10.5" font-weight="700" fill="' + n.color + '">' + esc(n.id) + '</text>' +
-          '<text x="' + lx.toFixed(1) + '" y="' + ly.toFixed(1) + '" text-anchor="' + anchor +
-          '" font-size="11.5" fill="#46505e">' + esc(n.name) + '</text>' +
+          '<rect class="nb" x="' + (-w / 2).toFixed(1) + '" y="' + (-h / 2).toFixed(1) +
+          '" width="' + w + '" height="' + h + '" rx="' + (h / 2) + '" fill="' + fill +
+          '" stroke="' + n.color + '" stroke-width="1.5"/>' +
+          '<text y="4" text-anchor="middle" font-size="11.5" font-weight="600" fill="' + n.color + '">' +
+          esc(n.name) + '</text>' +
           '</g>');
       }
     });
@@ -670,7 +765,7 @@
   function viewGraph() {
     var g = graphModel();
     graphLayout(g);
-    var bb = graphBBox(g, 34);
+    var bb = graphBBox(g, 22);
     var scenarios = items.filter(function (i) { return i.kind === 'scenario'; });
     var links = g.edges.length;
 
@@ -682,7 +777,7 @@
       '<i style="background:#f59e0b"></i>场景题</button>';
 
     var h = '<div class="hd"><h1>知识图谱</h1>' +
-      '<p>圆点是知识点，越大表示被越多内容关联；橙色方块是场景题，把跨层的知识点串在一起。拖动可平移，滚轮缩放，悬停看关联。</p></div>' +
+      '<p>每个标签是一个知识点，颜色代表所属层，底色越深表示被越多内容关联；橙色方块是场景题，把跨层的知识点串在一起。拖动可平移，滚轮缩放，悬停看标题与关联。</p></div>' +
       '<div class="gtools">' +
       '<button class="gbtn" id="gfit">适应窗口</button>' +
       '<button class="gbtn" id="gzin">＋</button>' +
@@ -768,7 +863,7 @@
       gSeed = Math.floor(Math.random() * 1e8);
       var g2 = graphModel();
       graphLayout(g2);
-      var bb2 = graphBBox(g2, 34);
+      var bb2 = graphBBox(g2, 22);
       var gw = document.getElementById('gw');
       gw.innerHTML = graphSvg(g2, bb2) + '<div class="gtipbox" id="gtip"></div>';
       bindGraph(g2);

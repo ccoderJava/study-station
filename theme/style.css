@@ -216,7 +216,7 @@ main.wide{padding:30px 26px 120px}
 .gwrap svg{display:block;width:100%;height:auto;max-height:86vh;cursor:grab;touch-action:none}
 .gwrap svg.dragging{cursor:grabbing}
 .gn{cursor:pointer}
-.gn:hover circle{stroke-width:2.4}
+.gn:hover .nb{stroke-width:2.4}
 .gtipbox{position:absolute;display:none;pointer-events:none;background:rgba(17,24,39,.93);color:#fff;
   font-size:12px;line-height:1.55;padding:6px 10px;border-radius:8px;max-width:260px;
   transform:translate(-50%,-100%);box-shadow:0 6px 18px rgba(17,24,39,.18);z-index:5}
@@ -537,6 +537,11 @@ body.lb-open{overflow:hidden}
 @media(max-width:1279px){
   .toc,.toc-resize{display:none}
 }
+/* 标签图谱在窄屏不要跟着等比缩小，否则 11.5px 的字会压到 7px 看不清 */
+@media(max-width:1120px){
+  .gwrap{overflow-x:auto}
+  .gwrap svg{width:1040px;max-height:none}
+}
 @media(min-width:1400px){
   .searchbox{transform:translateX(-72px)}
 }
@@ -545,7 +550,7 @@ body.lb-open{overflow:hidden}
 }
 @media(max-width:920px){
   .gwrap{overflow-x:auto}
-  .gwrap svg{width:820px;max-height:none}
+  .gwrap svg{width:900px;max-height:none}
   .gstat{width:100%;margin-left:0}
 
   aside{display:none}
