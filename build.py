@@ -35,6 +35,11 @@ HAN_RE = re.compile(r"[\u4e00-\u9fff]")
 # 精读笔记的骨架，与卡片的七段式不同：先复述、再判断，判断必须跟原文分开
 READ_SECTIONS = ["## 30 秒摘要", "## 它讲了什么", "## 关键论据", "## 我的判断", "## 落到我这里"]
 
+# 模拟面试记录：候选者回答逐字归档，复盘由面试官写，最后一段永远留给候选者本人
+INTERVIEW_MIN, INTERVIEW_MAX = 50, 240
+INTERVIEW_SECTIONS = ["## 本场结论", "## 逐题复盘", "## 暴露的缺口",
+                      "## 下次要补的", "## 我的口述记录"]
+
 
 def han_count(text):
     """只统计汉字数，与页面上念出来的字数一致。"""
@@ -500,11 +505,14 @@ TONE_BASELINE = os.path.join(BASE, "tone-baseline.json")
 def tone_text(body):
     """取出需要检查语气的正文。
 
-    代码块不算腔调（那是代码）；`## 我的口述记录` 之后是用户自己写的，不归 agent 管。
+    代码块不算腔调（那是代码）；`## 我的口述记录` 之后是用户自己写的，不归 agent 管；
+    引用块是候选者的原话或原文摘引，也不能按我的口癖去卡。
     """
     text = re.sub(r"```.*?```", "", body, flags=re.S)
     cut = text.find("## 我的口述记录")
-    return text[:cut] if cut >= 0 else text
+    if cut >= 0:
+        text = text[:cut]
+    return "\n".join(ln for ln in text.split("\n") if not ln.lstrip().startswith(">"))
 
 
 def tone_scan(body):
@@ -584,10 +592,11 @@ def build_data():
     cards = load_dir("cards")
     scenarios = load_dir("scenarios")
     reads = load_dir("reads")
+    interviews = load_dir("interviews")
 
     layers.sort(key=lambda x: int(x.get("order", 99)))
     nodes.sort(key=lambda x: x.get("id", ""))
-    items = cards + scenarios + reads
+    items = cards + scenarios + reads + interviews
 
     problems = []
 
@@ -613,6 +622,15 @@ def build_data():
             need(C, ["source"], "read:%s" % C["_file"])
             if C.get("source") and not str(C["source"]).startswith(("http://", "https://")):
                 problems.append("精读笔记的 source 必须是 http(s) 链接: %s" % C["_file"])
+        elif C["_file"].startswith("interviews/"):
+            # 面试记录：gaps 是查漏补缺聚合的数据源，必须是知识点 id
+            if C.get("kind") != "interview":
+                problems.append("面试记录的 kind 必须是 interview: %s" % C["_file"])
+            need(C, ["date"], "interview:%s" % C["_file"])
+            if isinstance(C.get("gaps"), str):
+                C["gaps"] = [x.strip() for x in C["gaps"].split(",") if x.strip()]
+            if not isinstance(C.get("gaps"), list):
+                C["gaps"] = []
         elif not C["nodes"]:
             problems.append("item:%s 缺少字段 nodes" % C["_file"])
 
@@ -625,9 +643,30 @@ def build_data():
         for t in C["nodes"]:
             if t not in node_ids:
                 problems.append("item %s 引用了不存在的知识点 %s" % (C["id"], t))
+        for t in C.get("gaps", []):
+            if t not in node_ids:
+                problems.append("item %s 的 gaps 里有不存在的知识点 %s" % (C["id"], t))
 
     # 30 秒简述是复述骨架：字数不达标就没法背，直接算校验失败
     for C in items:
+        if C.get("kind") == "interview":
+            sec = brief_section(C["_body"], "## 本场结论")
+            if sec is None:
+                problems.append("面试记录缺段：%s 没有「## 本场结论」" % C["_file"])
+            else:
+                n = han_count(sec)
+                if not INTERVIEW_MIN <= n <= INTERVIEW_MAX:
+                    problems.append("本场结论不达标：%s 实际 %d 个汉字（要求 %d~%d）"
+                                    % (C["_file"], n, INTERVIEW_MIN, INTERVIEW_MAX))
+            have = sections_of(C["_body"])
+            miss = [s for s in INTERVIEW_SECTIONS if s not in have]
+            if miss:
+                problems.append("面试骨架缺段：%s 少了 %s" % (C["_file"], "、".join(miss)))
+            qsec = brief_section(C["_body"], "## 逐题复盘") or ""
+            C["_qcount"] = len(re.findall(r"^### Q\d+", qsec, re.M))
+            if not C["_qcount"]:
+                problems.append("逐题复盘没有题目：%s 里至少要有一个「### Q1 ...」" % C["_file"])
+            continue
         if C.get("kind") == "read":
             sec = brief_section(C["_body"], "## 30 秒摘要")
             if sec is None:
@@ -677,6 +716,9 @@ def build_data():
         N["cards"] = [c["id"] for c in cards if N["id"] in c["nodes"]]
         N["scenarios"] = [c["id"] for c in scenarios if N["id"] in c["nodes"]]
         N["reads"] = [c["id"] for c in reads if N["id"] in c["nodes"]]
+        # 面试里被标成薄弱点的节点，即使题目没挂它，也算相关面试
+        N["interviews"] = [c["id"] for c in interviews
+                           if N["id"] in c["nodes"] or N["id"] in c.get("gaps", [])]
 
     # 插图必须真实存在：md 里写了 ![图注](img/x.svg) 但文件不在，页面会静默少一张图
     for obj in items + nodes:
@@ -699,7 +741,8 @@ def build_data():
         "nodes": [{"id": n["id"], "layer": n["layer"], "name": n["name"],
                    "keywords": n.get("keywords", []), "html": n["_html"],
                    "excerpt": n["_excerpt"], "cards": n["cards"],
-                   "scenarios": n["scenarios"], "reads": n["reads"]} for n in nodes],
+                   "scenarios": n["scenarios"], "reads": n["reads"],
+                   "interviews": n["interviews"]} for n in nodes],
         "items": [{"id": c["id"], "kind": c["kind"], "title": c["title"],
                    "graph": c.get("graph", ""),
                    "nodes": c["nodes"], "primary": c.get("primary", c["nodes"][0] if c["nodes"] else ""),
@@ -710,6 +753,10 @@ def build_data():
                    "src": ({"url": c.get("source", ""), "site": c.get("source_site", ""),
                             "author": c.get("author", ""), "date": c.get("published", ""),
                             "read": c.get("read_on", "")} if c.get("kind") == "read" else None),
+                   "itv": ({"date": c.get("date", ""), "score": c.get("score", ""),
+                            "gaps": c.get("gaps", []), "qcount": c.get("_qcount", 0),
+                            "duration": c.get("duration", ""),
+                            "focus": c.get("focus", "")} if c.get("kind") == "interview" else None),
                    "toc": c["_toc"], "excerpt": c["_excerpt"]} for c in items],
     }
     return data, problems, (tone_files, tone_hits)
@@ -825,9 +872,11 @@ def main():
     n_cards = len([c for c in data["items"] if c["kind"] == "card"])
     n_sc = len([c for c in data["items"] if c["kind"] == "scenario"])
     n_read = len([c for c in data["items"] if c["kind"] == "read"])
+    n_itv = len([c for c in data["items"] if c["kind"] == "interview"])
     print("构建完成")
     print("  知识点 %d 个（已覆盖 %d，%.0f%%）" % (n_nodes, cov, cov * 100.0 / max(n_nodes, 1)))
-    print("  卡片 %d 篇，场景题 %d 道，精读 %d 篇" % (n_cards, n_sc, n_read))
+    print("  卡片 %d 篇，场景题 %d 道，精读 %d 篇，模拟面试 %d 场"
+          % (n_cards, n_sc, n_read, n_itv))
     print("  数据 %.0f KB → assets/data.js" % (size / 1024.0))
     print("  入口 %s" % os.path.join(DIST, "index.html"))
     return 0

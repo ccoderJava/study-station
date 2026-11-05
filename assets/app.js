@@ -79,13 +79,16 @@
   }
   function evRank(it) { var i = EV_ORDER.indexOf(it.event); return i === -1 ? 99 : i; }
   function isRead(it) { return it.kind === 'read'; }
+  function isInterview(it) { return it.kind === 'interview'; }
+  /* 进侧栏、复习队列和「已能讲」的只有卡片与场景题；精读和面试记录是输入与记录 */
+  function isLearnable(it) { return !isRead(it) && !isInterview(it); }
   function readDate(it) {
     return (it.src && (it.src.read || it.src.date)) || it.updated || it.created || '';
   }
   function dueList() {
     var today = todayStr();
     return items.filter(function (it) {
-      if (isRead(it)) return false;            /* 精读不进遗忘曲线：它是输入，不是要背的题 */
+      if (!isLearnable(it)) return false;      /* 精读、面试记录不进遗忘曲线 */
       var e = entry(it.id);
       return e && e.due && e.due <= today;
     }).sort(function (a, b) {
@@ -128,7 +131,7 @@
   try { folds = JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') || {}; } catch (e) { folds = {}; }
 
   function renderSide() {
-    var g = groupBy(items.filter(function (i) { return !isRead(i); }), 'direction');
+    var g = groupBy(items.filter(isLearnable), 'direction');
     var dirs = orderedDirs(g);
     var h = '<div class="side-tools"><button type="button" class="side-fold" id="foldAll">' +
       (dirs.length && dirs.every(function (d) { return folds[d]; }) ? '全部展开' : '全部折叠') +
@@ -334,9 +337,10 @@
       var cid = decodeURIComponent(p[1]);
       var cur = itemById[cid];
       viewCard(cid);
-      setTabs(cur && isRead(cur) ? 'reads' : 'cards');
+      setTabs(cur && isRead(cur) ? 'reads' : (cur && isInterview(cur) ? 'interviews' : 'cards'));
     }
     else if (head === 'reads') { viewReads(); setTabs('reads'); }
+    else if (head === 'interviews') { viewInterviews(); setTabs('interviews'); }
     else if (head === 'node' && p[1]) { viewNode(p[1]); setTabs('roadmap'); }
     else if (head === 'roadmap') { viewRoadmap(); setTabs('roadmap'); }
     else if (head === 'graph') { viewGraph(); setTabs('graph'); }
@@ -352,9 +356,10 @@
     var nc = items.filter(function (i) { return i.kind === 'card'; }).length;
     var ns = items.filter(function (i) { return i.kind === 'scenario'; }).length;
     var nr = items.filter(isRead).length;
+    var ni = items.filter(isInterview).length;
     var solid = items.filter(function (i) { return stOf(i.id) === 'solid'; }).length;
     var learning = items.filter(function (i) { return stOf(i.id) === 'learning'; }).length;
-    var learnable = items.filter(function (i) { return !isRead(i); }).length;
+    var learnable = items.filter(isLearnable).length;
     var gaps = nodes.filter(function (n) { return !covered(n); });
 
     var h = '<div class="hd"><h1>复习总览</h1>' +
@@ -365,6 +370,7 @@
       stat(nc, '知识卡片', null) +
       stat(ns, '场景题', null) +
       stat(nr, '精读笔记', null) +
+      stat(ni, '模拟面试', null) +
       stat(solid + '/' + learnable, '已能讲', learnable ? Math.round(solid * 100 / learnable) : 0) +
       '</div>';
 
@@ -401,6 +407,18 @@
       h += '</div></div>';
     }
 
+    var weak = gapRank().slice(0, 6);
+    if (weak.length) {
+      h += '<div class="sec"><h2>面试暴露的缺口 <em>按被点名次数排，点开直接去补</em></h2><div class="gapgrid">';
+      weak.forEach(function (g) {
+        var href = g.cards.length ? '#/card/' + g.cards[0] : '#/node/' + g.id;
+        h += '<a class="gaprow" href="' + href + '"><span class="gr-n">' + g.n + ' 次</span>' +
+          '<span class="gr-t">' + esc(g.name) + '</span>' +
+          '<span class="gr-go">' + (g.cards.length ? '去补卡片 →' : '看知识点 →') + '</span></a>';
+      });
+      h += '</div><div class="morebar"><a class="btn" href="#/interviews">看全部面试记录</a></div></div>';
+    }
+
     var recentReads = items.filter(isRead).sort(function (a, b) {
       if (readDate(a) !== readDate(b)) return readDate(a) < readDate(b) ? 1 : -1;
       return a.id < b.id ? 1 : (a.id > b.id ? -1 : 0);   /* 同一天读的，编号大的在前 */
@@ -411,7 +429,17 @@
       h += '<div class="morebar"><a class="btn" href="#/reads">看全部精读</a></div></div>';
     }
 
-    var next = items.filter(function (i) { return !isRead(i) && stOf(i.id) === 'todo'; })
+    var recentIv = items.filter(isInterview).sort(function (a, b) {
+      if (ivDate(a) !== ivDate(b)) return ivDate(a) < ivDate(b) ? 1 : -1;
+      return a.id < b.id ? 1 : (a.id > b.id ? -1 : 0);
+    }).slice(0, 3);
+    if (recentIv.length) {
+      h += '<div class="sec"><h2>最近模拟面试 <em>回答逐字归档，复盘只写缺口</em></h2>';
+      recentIv.forEach(function (it) { h += rowItem(it); });
+      h += '<div class="morebar"><a class="btn" href="#/interviews">看全部面试记录</a></div></div>';
+    }
+
+    var next = items.filter(function (i) { return isLearnable(i) && stOf(i.id) === 'todo'; })
       .sort(function (a, b) {
         var d = evRank(a) - evRank(b);
         if (d) return d;
@@ -452,8 +480,8 @@
     h += '<div class="stats three">' +
       stat(due.length, '待复习', null) +
       stat(done, '今天已复习', null) +
-      stat(solid + '/' + items.filter(function (i) { return !isRead(i); }).length,
-        '已能讲', Math.round(solid * 100 / items.filter(function (i) { return !isRead(i); }).length)) +
+      stat(solid + '/' + items.filter(isLearnable).length,
+        '已能讲', Math.round(solid * 100 / items.filter(isLearnable).length)) +
       '</div>';
 
     if (reviewMsg) {
@@ -461,7 +489,7 @@
     }
 
     if (!due.length) {
-      var fresh = items.filter(function (i) { return !isRead(i) && stOf(i.id) === 'todo'; })
+      var fresh = items.filter(function (i) { return isLearnable(i) && stOf(i.id) === 'todo'; })
         .sort(function (a, b) { return evRank(a) - evRank(b); }).slice(0, 3);
       h += '<div class="emptybox"><b>队列空了</b>' +
         '<p>没有到期的卡片。标记「能讲」的内容会在第二天进来，答错则第二天再来一次。</p></div>';
@@ -1152,6 +1180,13 @@
       h += '</div>';
     }
 
+    var ivs = (n.interviews || []).map(function (i) { return itemById[i]; }).filter(Boolean);
+    if (ivs.length) {
+      h += '<div class="sec"><h2>相关面试 <em>' + ivs.length + ' 场</em></h2>';
+      ivs.forEach(function (it) { h += rowItem(it); });
+      h += '</div>';
+    }
+
     if (n.html && n.html.indexOf('待补充') === -1) {
       h += '<div class="sec"><h2>节点说明</h2><div class="reader">' + n.html + '</div></div>';
     }
@@ -1164,9 +1199,14 @@
   function rowItem(it) {
     var st = stOf(it.id);
     var rd = isRead(it);
+    var iv = isInterview(it);
     var badge = it.kind === 'scenario' ? '<span class="pill sc">场景</span>'
-      : rd ? '<span class="pill rd">精读</span>' : '';
-    var stTxt = rd ? ((it.src && it.src.site) || '') : st === 'solid' ? '已能讲' : st === 'learning' ? '学习中' : '';
+      : rd ? '<span class="pill rd">精读</span>'
+      : iv ? '<span class="pill iv">面试</span>' : '';
+    var stTxt = rd ? ((it.src && it.src.site) || '')
+      : iv ? ((it.itv && it.itv.date || '') +
+              (it.itv && it.itv.score !== '' && it.itv.score != null ? ' · ' + it.itv.score + '/3' : ''))
+      : st === 'solid' ? '已能讲' : st === 'learning' ? '学习中' : '';
     return '<a class="rowitem" href="#/card/' + it.id + '"><div class="ri-main">' +
       '<div class="ri-t">' + badge + (badge ? ' ' : '') + esc(it.title) + '</div>' +
       '<div class="ri-d">' + esc(it.excerpt || '') + '</div></div>' +
@@ -1201,6 +1241,8 @@
     if (isRead(it)) {
       h += '<div class="crumb"><a href="#/reads">精读</a> / ' +
         esc((it.src && it.src.site) || '外部文章') + '</div>';
+    } else if (isInterview(it)) {
+      h += '<div class="crumb"><a href="#/interviews">模拟面试</a> / ' + esc(it.direction) + '</div>';
     } else {
       h += '<div class="crumb"><a href="#/cards">全部内容</a> / ' + esc(it.direction) +
         ' / <a href="#/node/' + it.primary + '">' + esc((nodeById[it.primary] || {}).name || it.primary) + '</a></div>';
@@ -1222,6 +1264,16 @@
           esc(String(s.url).replace(/^https?:\/\//, '')) + '</a>' +
           '<span class="sb-tip">链接是外部的，内网打不开；笔记本身离线可读</span></div>';
       }
+    } else if (isInterview(it)) {
+      var v = it.itv || {};
+      h += '<div class="meta"><span class="pill iv">模拟面试</span>' +
+        (v.date ? '<span>' + esc(v.date) + '</span>' : '') +
+        (v.qcount ? '<span class="sp">·</span><span>' + v.qcount + ' 题</span>' : '') +
+        (v.score !== '' && v.score != null ? '<span class="sp">·</span><span>平均 ' + esc(String(v.score)) + ' / 3</span>' : '') +
+        (v.duration ? '<span class="sp">·</span><span>' + esc(String(v.duration)) + ' 分钟</span>' : '') +
+        ((v.gaps || []).length ? '<span class="sp">·</span><span class="due">' + v.gaps.length + ' 个薄弱点</span>' : '') +
+        (v.focus ? '<span class="sp">·</span><span>' + esc(v.focus) + '</span>' : '') +
+        '</div>';
     } else {
       h += '<div class="meta">' +
         (it.kind === 'scenario' ? '<span class="pill sc">场景题</span>' : '<span class="pill kp">知识点</span>') +
@@ -1410,7 +1462,7 @@
   /* ------------------------------------------------------------ 全部内容 */
   var listFilter = 'all';
   function viewList() {
-    var pub = items.filter(function (i) { return !isRead(i); });
+    var pub = items.filter(isLearnable);
     var dirs = groupBy(pub, 'direction');
     var h = '<div class="hd"><h1>全部内容</h1><p>' + pub.length + ' 篇，按技术方向分组。</p></div>';
     h += '<div class="filterbar">' +
@@ -1472,6 +1524,75 @@
     view.scrollTop = 0;
   }
 
+  /* ------------------------------------------------------------ 模拟面试 */
+  function ivDate(it) {
+    return (it.itv && it.itv.date) || it.updated || it.created || '';
+  }
+  /* 跨场次聚合：哪些知识点被反复点名 */
+  function gapRank() {
+    var m = {};
+    items.filter(isInterview).forEach(function (it) {
+      ((it.itv && it.itv.gaps) || []).forEach(function (g) { m[g] = (m[g] || 0) + 1; });
+    });
+    return Object.keys(m).map(function (id) {
+      var n = nodeById[id];
+      return { id: id, name: n ? n.name : id, n: m[id], cards: n ? (n.cards || []) : [] };
+    }).sort(function (a, b) { return b.n - a.n || (a.id < b.id ? -1 : 1); });
+  }
+  function viewInterviews() {
+    var ivs = items.filter(isInterview).sort(function (a, b) {
+      if (ivDate(a) !== ivDate(b)) return ivDate(a) < ivDate(b) ? 1 : -1;
+      return a.id < b.id ? 1 : (a.id > b.id ? -1 : 0);
+    });
+    var weak = gapRank();
+    var h = '<div class="hd"><h1>模拟面试</h1>' +
+      '<p>你当候选者，我当面试官。回答逐字归档，复盘只写判断和缺口，最后一段留给你自己重讲。</p></div>';
+
+    h += '<div class="ivbox"><div class="ivbox-h">查漏补缺 <span>' +
+      (weak.length ? '累计 ' + weak.length + ' 个知识点被点名' : '还没有数据') + '</span></div>';
+    if (weak.length) {
+      h += '<div class="gapgrid">';
+      weak.forEach(function (g) {
+        var href = g.cards.length ? '#/card/' + g.cards[0] : '#/node/' + g.id;
+        h += '<a class="gaprow" href="' + href + '"><span class="gr-n">' + g.n + ' 次</span>' +
+          '<span class="gr-t">' + esc(g.name) + '</span>' +
+          '<span class="gr-go">' + (g.cards.length ? '去补卡片 →' : '看知识点 →') + '</span></a>';
+      });
+      h += '</div>';
+    } else {
+      h += '<div class="ivhint">每场结束会把卡住和半通的知识点记进来。' +
+        '同一处被点名两次以上，就别再靠读卡片糊过去了，找人讲一遍。</div>';
+    }
+    h += '</div>';
+
+    if (!ivs.length) {
+      h += '<div class="emptyhit">还没有面试记录。在对话里说「开始面试」，我出题、你回答；' +
+        '说「结束，复盘」我就把这一场归档到这里，候选者回答一字不改。</div>';
+    } else {
+      h += '<div class="readlist">';
+      ivs.forEach(function (it) {
+        var v = it.itv || {};
+        var kw = (v.gaps || []).map(function (nid) {
+          return '<span class="rdkw weak">' + esc((nodeById[nid] || {}).name || nid) + '</span>';
+        }).join('');
+        h += '<a class="rdcard" href="#/card/' + it.id + '">' +
+          '<div class="rd-meta"><span class="pill iv">模拟面试</span>' +
+          (v.date ? '<span>' + esc(v.date) + '</span>' : '') +
+          (v.qcount ? '<span class="sp">·</span><span>' + v.qcount + ' 题</span>' : '') +
+          (v.score !== '' && v.score != null ? '<span class="sp">·</span><span>平均 ' + esc(String(v.score)) + ' / 3</span>' : '') +
+          (v.duration ? '<span class="sp">·</span><span>' + esc(String(v.duration)) + ' 分钟</span>' : '') +
+          (v.focus ? '<span class="sp">·</span><span>' + esc(v.focus) + '</span>' : '') +
+          '</div><div class="rd-t">' + esc(it.title) + '</div>' +
+          '<div class="rd-d">' + esc(it.excerpt || '') + '</div>' +
+          (kw ? '<div class="rd-kw">' + kw + '</div>' : '') + '</a>';
+      });
+      h += '</div>';
+    }
+    view.className = '';
+    view.innerHTML = h;
+    view.scrollTop = 0;
+  }
+
   /* ------------------------------------------------------------ 搜索 */
   function doSearch(kw) {
     kw = (kw || '').trim().toLowerCase();
@@ -1485,9 +1606,10 @@
     });
     items.forEach(function (it) {
       var hay = (it.id + ' ' + it.title + ' ' + it.nodes.join(' ') + ' ' + it.direction + ' ' + it.event + ' ' +
-        (it.src ? it.src.site + ' ' + it.src.author : '') + ' ' + it.excerpt).toLowerCase();
+        (it.src ? it.src.site + ' ' + it.src.author : '') + ' ' +
+        (it.itv ? ' ' + (it.itv.focus || '') + ' ' + (it.itv.gaps || []).join(' ') : '') + ' ' + it.excerpt).toLowerCase();
       if (hay.indexOf(kw) > -1) {
-        res.push({ href: '#/card/' + it.id, t: it.title, m: (it.kind === 'scenario' ? '场景题' : isRead(it) ? '精读' : '卡片') + ' · ' + it.direction + ' · ' + it.nodes.join(' ') });
+        res.push({ href: '#/card/' + it.id, t: it.title, m: (it.kind === 'scenario' ? '场景题' : isRead(it) ? '精读' : isInterview(it) ? '面试' : '卡片') + ' · ' + it.direction + ' · ' + it.nodes.join(' ') });
       }
     });
     if (!res.length) {

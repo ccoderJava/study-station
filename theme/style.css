@@ -608,3 +608,20 @@ body.lb-open{overflow:hidden}
 .rd-kw{margin-top:9px;display:flex;gap:6px;flex-wrap:wrap}
 .rdkw{font-size:11px;color:var(--dim);background:var(--panel2);border-radius:5px;padding:1px 7px}
 .morebar{margin-top:10px}
+
+/* 模拟面试：青色区别于卡片(绿)、场景题(橙)、精读(紫)；薄弱点用红 */
+.pill.iv{background:#ecfeff;color:#0e7490;border:1px solid #a5f3fc}
+.ivbox{border:1px solid var(--line);border-radius:11px;background:var(--panel);
+  padding:14px 16px;margin:0 0 22px}
+.ivbox-h{font-size:14px;font-weight:600;margin-bottom:11px}
+.ivbox-h span{font-size:11.5px;font-weight:400;color:var(--faint);margin-left:8px}
+.ivhint{font-size:12.5px;color:var(--dim);line-height:1.75}
+.gapgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:8px}
+.gaprow{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:8px;
+  padding:9px 11px;background:#fff;text-decoration:none;color:inherit;font-size:12.5px}
+.gaprow:hover{border-color:#fca5a5;background:#fffafa}
+.gr-n{font-size:11px;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;
+  border-radius:5px;padding:1px 6px;white-space:nowrap}
+.gr-t{flex:1;font-weight:600}
+.gr-go{font-size:11px;color:var(--faint);white-space:nowrap}
+.rdkw.weak{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
