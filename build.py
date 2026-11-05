@@ -256,9 +256,22 @@ def highlight(code, lang):
 
 # ------------------------------------------------------------------- markdown
 
+# 正文里 `E5-01 支付状态机与超时补偿` 这种「回看」写法，自动变成站内卡片链接。
+# 规则收得很窄：反引号内必须以「节点号-序号 + 空格 + 标题」开头，单独一个 id 或普通代码片段都不转。
+CARD_REF_RE = re.compile(r"^([A-Z]\d-\d\d)\s+(.+)$")
+
+
 def inline(s):
     s = html.escape(s, quote=False)
-    s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+
+    def code_or_ref(m):
+        txt = m.group(1)
+        ref = CARD_REF_RE.match(txt)
+        if ref:
+            return '<a class="cardref" href="#/card/%s">%s</a>' % (ref.group(1), txt)
+        return "<code>%s</code>" % txt
+
+    s = re.sub(r"`([^`]+)`", code_or_ref, s)
     # 加粗用非贪婪匹配：允许 **…`len * 2 / 3`…** 这种正文里带单个 * 的写法
     s = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
     s = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<em>\1</em>", s)
@@ -730,6 +743,16 @@ def build_data():
             if not (os.path.exists(os.path.join(THEME, "img", os.path.basename(src)))
                     or os.path.exists(os.path.join(BASE, src))):
                 problems.append("%s 引用的插图不存在: %s" % (obj["id"], src))
+
+    # 回看链接：反引号里的卡片 id 必须真实存在，点过去不能是空白页。
+    # 代码块不扫（``` 里的反引号是语法）；渲染侧用同一条 CARD_REF_RE，保证校验和显示一致。
+    item_ids = {c["id"] for c in items}
+    for obj in items + nodes:
+        body = re.sub(r"```.*?```", "", obj["_body"], flags=re.S)
+        for m in re.finditer(r"`([^`\n]+)`", body):
+            ref = CARD_REF_RE.match(m.group(1))
+            if ref and ref.group(1) not in item_ids:
+                problems.append("%s 回看的卡片不存在: %s" % (obj["id"], ref.group(1)))
 
     # 语气：存量记基线，只有超配额的新句子才算错
     tone_files, tone_hits = tone_report(items, load_tone_baseline(), problems)
