@@ -553,12 +553,6 @@ body.lb-open{overflow:hidden}
   .gwrap{overflow-x:auto}
   .gwrap svg{width:1120px;max-height:none}
 }
-@media(min-width:1400px){
-  .searchbox{transform:translateX(-72px)}
-}
-@media(min-width:1600px){
-  .searchbox{transform:translateX(-160px)}
-}
 @media(max-width:920px){
   .gwrap{overflow-x:auto}
   .gwrap svg{width:1000px;max-height:none}
@@ -595,3 +589,22 @@ body.lb-open{overflow:hidden}
   .modal-mask{padding:14px 10px}
   .modal textarea{height:100px}
 }
+
+/* 精读：外部文章的笔记。紫色跟知识卡片(绿)、场景题(橙)区分开 */
+.pill.rd{background:#f5f3ff;color:#6d28d9;border:1px solid #ddd6fe}
+.srcbox{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border:1px solid var(--line);
+  background:var(--panel);border-radius:9px;padding:9px 12px;margin:0 0 22px;font-size:12.5px}
+.srcbox .sb-k{color:var(--faint)}
+.srcbox a{color:var(--acc);word-break:break-all;text-decoration:none}
+.srcbox a:hover{text-decoration:underline}
+.srcbox .sb-tip{color:var(--faint);font-size:11.5px}
+.readlist{display:grid;gap:10px}
+.rdcard{display:block;border:1px solid var(--line);border-radius:11px;padding:14px 16px;background:#fff;
+  text-decoration:none;color:inherit}
+.rdcard:hover{border-color:#ddd6fe;background:#fdfcff}
+.rd-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:11.5px;color:var(--faint)}
+.rd-t{font-size:15px;font-weight:600;margin:7px 0 4px;letter-spacing:-.2px}
+.rd-d{font-size:12.5px;color:var(--dim);line-height:1.65}
+.rd-kw{margin-top:9px;display:flex;gap:6px;flex-wrap:wrap}
+.rdkw{font-size:11px;color:var(--dim);background:var(--panel2);border-radius:5px;padding:1px 7px}
+.morebar{margin-top:10px}

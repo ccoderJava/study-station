@@ -78,9 +78,14 @@
     saveProg();
   }
   function evRank(it) { var i = EV_ORDER.indexOf(it.event); return i === -1 ? 99 : i; }
+  function isRead(it) { return it.kind === 'read'; }
+  function readDate(it) {
+    return (it.src && (it.src.read || it.src.date)) || it.updated || it.created || '';
+  }
   function dueList() {
     var today = todayStr();
     return items.filter(function (it) {
+      if (isRead(it)) return false;            /* 精读不进遗忘曲线：它是输入，不是要背的题 */
       var e = entry(it.id);
       return e && e.due && e.due <= today;
     }).sort(function (a, b) {
@@ -123,7 +128,7 @@
   try { folds = JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') || {}; } catch (e) { folds = {}; }
 
   function renderSide() {
-    var g = groupBy(items, 'direction');
+    var g = groupBy(items.filter(function (i) { return !isRead(i); }), 'direction');
     var dirs = orderedDirs(g);
     var h = '<div class="side-tools"><button type="button" class="side-fold" id="foldAll">' +
       (dirs.length && dirs.every(function (d) { return folds[d]; }) ? '全部展开' : '全部折叠') +
@@ -325,7 +330,13 @@
     if (tocCleanup) tocCleanup();
     var p = parts();
     var head = p[0] || '';
-    if (head === 'card' && p[1]) { viewCard(decodeURIComponent(p[1])); setTabs(''); }
+    if (head === 'card' && p[1]) {
+      var cid = decodeURIComponent(p[1]);
+      var cur = itemById[cid];
+      viewCard(cid);
+      setTabs(cur && isRead(cur) ? 'reads' : 'cards');
+    }
+    else if (head === 'reads') { viewReads(); setTabs('reads'); }
     else if (head === 'node' && p[1]) { viewNode(p[1]); setTabs('roadmap'); }
     else if (head === 'roadmap') { viewRoadmap(); setTabs('roadmap'); }
     else if (head === 'graph') { viewGraph(); setTabs('graph'); }
@@ -340,8 +351,10 @@
     var cov = nodes.filter(covered).length;
     var nc = items.filter(function (i) { return i.kind === 'card'; }).length;
     var ns = items.filter(function (i) { return i.kind === 'scenario'; }).length;
+    var nr = items.filter(isRead).length;
     var solid = items.filter(function (i) { return stOf(i.id) === 'solid'; }).length;
     var learning = items.filter(function (i) { return stOf(i.id) === 'learning'; }).length;
+    var learnable = items.filter(function (i) { return !isRead(i); }).length;
     var gaps = nodes.filter(function (n) { return !covered(n); });
 
     var h = '<div class="hd"><h1>复习总览</h1>' +
@@ -351,7 +364,8 @@
       stat(cov + '/' + nodes.length, '知识点覆盖', Math.round(cov * 100 / nodes.length)) +
       stat(nc, '知识卡片', null) +
       stat(ns, '场景题', null) +
-      stat(solid + '/' + items.length, '已能讲', Math.round(solid * 100 / items.length)) +
+      stat(nr, '精读笔记', null) +
+      stat(solid + '/' + learnable, '已能讲', learnable ? Math.round(solid * 100 / learnable) : 0) +
       '</div>';
 
     var due = dueList();
@@ -387,7 +401,16 @@
       h += '</div></div>';
     }
 
-    var next = items.filter(function (i) { return stOf(i.id) === 'todo'; })
+    var recentReads = items.filter(isRead).sort(function (a, b) {
+      return readDate(a) < readDate(b) ? 1 : (readDate(a) > readDate(b) ? -1 : 0);
+    }).slice(0, 3);
+    if (recentReads.length) {
+      h += '<div class="sec"><h2>最近精读 <em>外部文章的拆解与判断</em></h2>';
+      recentReads.forEach(function (it) { h += rowItem(it); });
+      h += '<div class="morebar"><a class="btn" href="#/reads">看全部精读</a></div></div>';
+    }
+
+    var next = items.filter(function (i) { return !isRead(i) && stOf(i.id) === 'todo'; })
       .sort(function (a, b) {
         var d = evRank(a) - evRank(b);
         if (d) return d;
@@ -428,7 +451,8 @@
     h += '<div class="stats three">' +
       stat(due.length, '待复习', null) +
       stat(done, '今天已复习', null) +
-      stat(solid + '/' + items.length, '已能讲', Math.round(solid * 100 / items.length)) +
+      stat(solid + '/' + items.filter(function (i) { return !isRead(i); }).length,
+        '已能讲', Math.round(solid * 100 / items.filter(function (i) { return !isRead(i); }).length)) +
       '</div>';
 
     if (reviewMsg) {
@@ -436,7 +460,7 @@
     }
 
     if (!due.length) {
-      var fresh = items.filter(function (i) { return stOf(i.id) === 'todo'; })
+      var fresh = items.filter(function (i) { return !isRead(i) && stOf(i.id) === 'todo'; })
         .sort(function (a, b) { return evRank(a) - evRank(b); }).slice(0, 3);
       h += '<div class="emptybox"><b>队列空了</b>' +
         '<p>没有到期的卡片。标记「能讲」的内容会在第二天进来，答错则第二天再来一次。</p></div>';
@@ -1120,6 +1144,13 @@
     else { h += '<div class="emptyhit">暂无。场景题是把多个知识点串起来用的练习。</div>'; }
     h += '</div>';
 
+    var rds = (n.reads || []).map(function (i) { return itemById[i]; }).filter(Boolean);
+    if (rds.length) {
+      h += '<div class="sec"><h2>相关精读 <em>' + rds.length + ' 篇</em></h2>';
+      rds.forEach(function (it) { h += rowItem(it); });
+      h += '</div>';
+    }
+
     if (n.html && n.html.indexOf('待补充') === -1) {
       h += '<div class="sec"><h2>节点说明</h2><div class="reader">' + n.html + '</div></div>';
     }
@@ -1131,8 +1162,10 @@
 
   function rowItem(it) {
     var st = stOf(it.id);
-    var badge = it.kind === 'scenario' ? '<span class="pill sc">场景</span>' : '';
-    var stTxt = st === 'solid' ? '已能讲' : st === 'learning' ? '学习中' : '';
+    var rd = isRead(it);
+    var badge = it.kind === 'scenario' ? '<span class="pill sc">场景</span>'
+      : rd ? '<span class="pill rd">精读</span>' : '';
+    var stTxt = rd ? ((it.src && it.src.site) || '') : st === 'solid' ? '已能讲' : st === 'learning' ? '学习中' : '';
     return '<a class="rowitem" href="#/card/' + it.id + '"><div class="ri-main">' +
       '<div class="ri-t">' + badge + (badge ? ' ' : '') + esc(it.title) + '</div>' +
       '<div class="ri-d">' + esc(it.excerpt || '') + '</div></div>' +
@@ -1164,36 +1197,59 @@
 
     var h = '<div class="viewcard">';
     h += '<div class="reader">';
-    h += '<div class="crumb"><a href="#/cards">全部内容</a> / ' + esc(it.direction) +
-      ' / <a href="#/node/' + it.primary + '">' + esc((nodeById[it.primary] || {}).name || it.primary) + '</a></div>';
+    if (isRead(it)) {
+      h += '<div class="crumb"><a href="#/reads">精读</a> / ' +
+        esc((it.src && it.src.site) || '外部文章') + '</div>';
+    } else {
+      h += '<div class="crumb"><a href="#/cards">全部内容</a> / ' + esc(it.direction) +
+        ' / <a href="#/node/' + it.primary + '">' + esc((nodeById[it.primary] || {}).name || it.primary) + '</a></div>';
+    }
 
     h += '<div class="titlebar"><h1>' + esc(it.title) + '</h1></div>';
 
-    h += '<div class="meta">' +
-      (it.kind === 'scenario' ? '<span class="pill sc">场景题</span>' : '<span class="pill kp">知识点</span>') +
-      (it.level === 'core' ? '<span class="pill core">重点</span>' : '') +
-      '<span>' + esc(it.direction) + '</span><span class="sp">·</span>' +
-      '<span>' + esc(it.event) + '</span>' +
-      (it.project ? '<span class="sp">·</span><span>' + esc(it.project) + '</span>' : '') +
-      '<span class="sp">·</span><span>更新 ' + esc(it.updated || it.created || '') + '</span>' +
-      (function () {
-        var e = entry(id);
-        return e && e.due ? '<span class="sp">·</span><span class="due">下次复习 ' + e.due +
-          (e.n ? ' · 第 ' + e.n + ' 次' : '') + '</span>' : '';
-      })() +
-      '<span class="prog">' +
-      '<button class="pbtn' + (st === 'todo' ? ' on' : '') + '" data-s="todo">未学</button>' +
-      '<button class="pbtn' + (st === 'learning' ? ' on' : '') + '" data-s="learning">学习中</button>' +
-      '<button class="pbtn' + (st === 'solid' ? ' on' : '') + '" data-s="solid">能讲</button>' +
-      '</span></div>';
+    if (isRead(it)) {
+      var s = it.src || {};
+      h += '<div class="meta"><span class="pill rd">精读</span>' +
+        (s.site ? '<span>' + esc(s.site) + '</span>' : '') +
+        (s.author ? '<span class="sp">·</span><span>' + esc(s.author) + '</span>' : '') +
+        (s.date ? '<span class="sp">·</span><span>原文 ' + esc(s.date) + '</span>' : '') +
+        (s.read ? '<span class="sp">·</span><span>' + esc(s.read) + ' 读完</span>' : '') +
+        '</div>';
+      if (s.url) {
+        h += '<div class="srcbox"><span class="sb-k">原文</span>' +
+          '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' +
+          esc(String(s.url).replace(/^https?:\/\//, '')) + '</a>' +
+          '<span class="sb-tip">链接是外部的，内网打不开；笔记本身离线可读</span></div>';
+      }
+    } else {
+      h += '<div class="meta">' +
+        (it.kind === 'scenario' ? '<span class="pill sc">场景题</span>' : '<span class="pill kp">知识点</span>') +
+        (it.level === 'core' ? '<span class="pill core">重点</span>' : '') +
+        '<span>' + esc(it.direction) + '</span><span class="sp">·</span>' +
+        '<span>' + esc(it.event) + '</span>' +
+        (it.project ? '<span class="sp">·</span><span>' + esc(it.project) + '</span>' : '') +
+        '<span class="sp">·</span><span>更新 ' + esc(it.updated || it.created || '') + '</span>' +
+        (function () {
+          var e = entry(id);
+          return e && e.due ? '<span class="sp">·</span><span class="due">下次复习 ' + e.due +
+            (e.n ? ' · 第 ' + e.n + ' 次' : '') + '</span>' : '';
+        })() +
+        '<span class="prog">' +
+        '<button class="pbtn' + (st === 'todo' ? ' on' : '') + '" data-s="todo">未学</button>' +
+        '<button class="pbtn' + (st === 'learning' ? ' on' : '') + '" data-s="learning">学习中</button>' +
+        '<button class="pbtn' + (st === 'solid' ? ' on' : '') + '" data-s="solid">能讲</button>' +
+        '</span></div>';
+    }
 
     h += '<article>' + it.html + '</article>';
 
-    h += '<div class="sec" style="margin-top:34px"><h2>关联知识点</h2><div class="kw">' +
-      it.nodes.map(function (nid) {
-        var n = nodeById[nid];
-        return '<a class="pill kp" style="text-decoration:none" href="#/node/' + nid + '">' + nid + ' ' + esc(n ? n.name : '') + '</a>';
-      }).join('') + '</div></div>';
+    if (it.nodes.length) {
+      h += '<div class="sec" style="margin-top:34px"><h2>关联知识点</h2><div class="kw">' +
+        it.nodes.map(function (nid) {
+          var n = nodeById[nid];
+          return '<a class="pill kp" style="text-decoration:none" href="#/node/' + nid + '">' + nid + ' ' + esc(n ? n.name : '') + '</a>';
+        }).join('') + '</div></div>';
+    }
 
     h += '<div class="footnav">' +
       (prev ? '<a href="#/card/' + prev.id + '">上一篇<b>' + esc(prev.title) + '</b></a>' : '<span style="flex:1"></span>') +
@@ -1353,8 +1409,9 @@
   /* ------------------------------------------------------------ 全部内容 */
   var listFilter = 'all';
   function viewList() {
-    var dirs = groupBy(items, 'direction');
-    var h = '<div class="hd"><h1>全部内容</h1><p>' + items.length + ' 篇，按技术方向分组。</p></div>';
+    var pub = items.filter(function (i) { return !isRead(i); });
+    var dirs = groupBy(pub, 'direction');
+    var h = '<div class="hd"><h1>全部内容</h1><p>' + pub.length + ' 篇，按技术方向分组。</p></div>';
     h += '<div class="filterbar">' +
       ['all', 'card', 'scenario'].map(function (k) {
         var label = k === 'all' ? '全部' : k === 'card' ? '知识卡片' : '场景题';
@@ -1377,6 +1434,42 @@
     });
   }
 
+  /* ------------------------------------------------------------ 精读 */
+  function viewReads() {
+    var rs = items.filter(isRead).sort(function (a, b) {
+      return readDate(a) < readDate(b) ? 1 : (readDate(a) > readDate(b) ? -1 : 0);
+    });
+    var h = '<div class="hd"><h1>精读</h1><p>' + rs.length +
+      ' 篇外部文章：先把原文讲清楚，再写自己的判断，最后落回站内卡片和项目。</p></div>';
+    if (!rs.length) {
+      h += '<div class="emptyhit">还没有精读笔记。给一篇文章链接，按五段整理：' +
+        '摘要 / 原文讲了什么 / 关键论据 / 我的判断 / 落到我这里。</div>';
+    } else {
+      h += '<div class="readlist">';
+      rs.forEach(function (it) {
+        var s = it.src || {};
+        var kw = it.nodes.map(function (nid) {
+          var n = nodeById[nid];
+          return '<span class="rdkw">' + esc(n ? n.name : nid) + '</span>';
+        }).join('');
+        h += '<a class="rdcard" href="#/card/' + it.id + '">' +
+          '<div class="rd-meta"><span class="pill rd">精读</span>' +
+          (s.site ? '<span>' + esc(s.site) + '</span>' : '') +
+          (s.date ? '<span class="sp">·</span><span>' + esc(s.date) + '</span>' : '') +
+          (s.read ? '<span class="sp">·</span><span>' + esc(s.read) + ' 读完</span>' : '') +
+          '</div>' +
+          '<div class="rd-t">' + esc(it.title) + '</div>' +
+          '<div class="rd-d">' + esc(it.excerpt || '') + '</div>' +
+          (kw ? '<div class="rd-kw">' + kw + '</div>' : '') +
+          '</a>';
+      });
+      h += '</div>';
+    }
+    view.className = '';
+    view.innerHTML = h;
+    view.scrollTop = 0;
+  }
+
   /* ------------------------------------------------------------ 搜索 */
   function doSearch(kw) {
     kw = (kw || '').trim().toLowerCase();
@@ -1389,9 +1482,10 @@
       }
     });
     items.forEach(function (it) {
-      var hay = (it.id + ' ' + it.title + ' ' + it.nodes.join(' ') + ' ' + it.direction + ' ' + it.event + ' ' + it.excerpt).toLowerCase();
+      var hay = (it.id + ' ' + it.title + ' ' + it.nodes.join(' ') + ' ' + it.direction + ' ' + it.event + ' ' +
+        (it.src ? it.src.site + ' ' + it.src.author : '') + ' ' + it.excerpt).toLowerCase();
       if (hay.indexOf(kw) > -1) {
-        res.push({ href: '#/card/' + it.id, t: it.title, m: (it.kind === 'scenario' ? '场景题' : '卡片') + ' · ' + it.direction + ' · ' + it.nodes.join(' ') });
+        res.push({ href: '#/card/' + it.id, t: it.title, m: (it.kind === 'scenario' ? '场景题' : isRead(it) ? '精读' : '卡片') + ' · ' + it.direction + ' · ' + it.nodes.join(' ') });
       }
     });
     if (!res.length) {

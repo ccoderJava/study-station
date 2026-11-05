@@ -28,7 +28,12 @@ TODAY = datetime.date.today().isoformat()
 
 # 30 秒简述的字数口径：只数汉字，标点、英文字母、数字、代码都不算
 BRIEF_MIN, BRIEF_MAX = 150, 250
+# 精读笔记的摘要更短：讲清「这篇值不值得看」，不用背
+READ_MIN, READ_MAX = 80, 200
 HAN_RE = re.compile(r"[\u4e00-\u9fff]")
+
+# 精读笔记的骨架，与卡片的七段式不同：先复述、再判断，判断必须跟原文分开
+READ_SECTIONS = ["## 30 秒摘要", "## 它讲了什么", "## 关键论据", "## 我的判断", "## 落到我这里"]
 
 
 def han_count(text):
@@ -36,8 +41,8 @@ def han_count(text):
     return len(HAN_RE.findall(text))
 
 
-def brief_section(body):
-    """取出正文里 `## 30 秒简述` 段；没有该段返回 None。
+def brief_section(body, title="## 30 秒简述"):
+    """取出正文里指定标题的整段；没有该段返回 None。
 
     只认行首的二级标题，代码块里的 `## ` 不算标题。
     """
@@ -51,12 +56,17 @@ def brief_section(body):
         if not fenced and re.match(r"^##\s+", ln):
             if inside:
                 break
-            if ln.strip() == "## 30 秒简述":
+            if ln.strip() == title:
                 inside = True
             continue
         if inside:
             out.append(ln)
     return "\n".join(out) if inside else None
+
+
+def sections_of(body):
+    """正文里所有二级标题的字面，用来校验骨架齐不齐。"""
+    return [ln.strip() for ln in body.split("\n") if re.match(r"^##\s+", ln.strip())]
 
 
 # ---------------------------------------------------------------- front-matter
@@ -573,10 +583,11 @@ def build_data():
     nodes = load_dir("nodes")
     cards = load_dir("cards")
     scenarios = load_dir("scenarios")
+    reads = load_dir("reads")
 
     layers.sort(key=lambda x: int(x.get("order", 99)))
     nodes.sort(key=lambda x: x.get("id", ""))
-    items = cards + scenarios
+    items = cards + scenarios + reads
 
     problems = []
 
@@ -590,9 +601,20 @@ def build_data():
     for N in nodes:
         need(N, ["id", "layer", "name"], "node:%s" % N["_file"])
     for C in items:
-        need(C, ["id", "title", "kind", "nodes"], "item:%s" % C["_file"])
+        need(C, ["id", "title", "kind"], "item:%s" % C["_file"])
         if isinstance(C["nodes"], str):
             C["nodes"] = [x.strip() for x in C["nodes"].split(",") if x.strip()]
+        if not isinstance(C["nodes"], list):
+            C["nodes"] = []
+        if C["_file"].startswith("reads/"):
+            # 精读笔记：必须有原文链接；节点可以先不挂，读完再归类
+            if C.get("kind") != "read":
+                problems.append("精读笔记的 kind 必须是 read: %s" % C["_file"])
+            need(C, ["source"], "read:%s" % C["_file"])
+            if C.get("source") and not str(C["source"]).startswith(("http://", "https://")):
+                problems.append("精读笔记的 source 必须是 http(s) 链接: %s" % C["_file"])
+        elif not C["nodes"]:
+            problems.append("item:%s 缺少字段 nodes" % C["_file"])
 
     node_ids = {n["id"] for n in nodes}
     layer_ids = {l["id"] for l in layers}
@@ -606,6 +628,24 @@ def build_data():
 
     # 30 秒简述是复述骨架：字数不达标就没法背，直接算校验失败
     for C in items:
+        if C.get("kind") == "read":
+            sec = brief_section(C["_body"], "## 30 秒摘要")
+            if sec is None:
+                problems.append("30 秒摘要缺失：%s 没有「## 30 秒摘要」段" % C["_file"])
+            else:
+                n = han_count(sec)
+                C["_brief"] = n
+                if n < READ_MIN:
+                    problems.append("30 秒摘要不达标：%s 实际 %d 个汉字（要求 %d~%d，偏短 %d）"
+                                    % (C["_file"], n, READ_MIN, READ_MAX, READ_MIN - n))
+                elif n > READ_MAX:
+                    problems.append("30 秒摘要不达标：%s 实际 %d 个汉字（要求 %d~%d，偏长 %d）"
+                                    % (C["_file"], n, READ_MIN, READ_MAX, n - READ_MAX))
+            have = sections_of(C["_body"])
+            miss = [s for s in READ_SECTIONS if s not in have]
+            if miss:
+                problems.append("精读骨架缺段：%s 少了 %s" % (C["_file"], "、".join(miss)))
+            continue
         sec = brief_section(C["_body"])
         if sec is None:
             problems.append("30 秒简述缺失：%s 没有「## 30 秒简述」段" % C["_file"])
@@ -636,6 +676,7 @@ def build_data():
     for N in nodes:
         N["cards"] = [c["id"] for c in cards if N["id"] in c["nodes"]]
         N["scenarios"] = [c["id"] for c in scenarios if N["id"] in c["nodes"]]
+        N["reads"] = [c["id"] for c in reads if N["id"] in c["nodes"]]
 
     # 插图必须真实存在：md 里写了 ![图注](img/x.svg) 但文件不在，页面会静默少一张图
     for obj in items + nodes:
@@ -658,7 +699,7 @@ def build_data():
         "nodes": [{"id": n["id"], "layer": n["layer"], "name": n["name"],
                    "keywords": n.get("keywords", []), "html": n["_html"],
                    "excerpt": n["_excerpt"], "cards": n["cards"],
-                   "scenarios": n["scenarios"]} for n in nodes],
+                   "scenarios": n["scenarios"], "reads": n["reads"]} for n in nodes],
         "items": [{"id": c["id"], "kind": c["kind"], "title": c["title"],
                    "graph": c.get("graph", ""),
                    "nodes": c["nodes"], "primary": c.get("primary", c["nodes"][0] if c["nodes"] else ""),
@@ -666,6 +707,9 @@ def build_data():
                    "project": c.get("project", ""), "level": c["level"],
                    "status": c["status"], "created": c.get("created", ""),
                    "updated": c.get("updated", ""), "html": c["_html"],
+                   "src": ({"url": c.get("source", ""), "site": c.get("source_site", ""),
+                            "author": c.get("author", ""), "date": c.get("published", ""),
+                            "read": c.get("read_on", "")} if c.get("kind") == "read" else None),
                    "toc": c["_toc"], "excerpt": c["_excerpt"]} for c in items],
     }
     return data, problems, (tone_files, tone_hits)
@@ -780,9 +824,10 @@ def main():
     cov = len([n for n in data["nodes"] if n["cards"] or n["scenarios"]])
     n_cards = len([c for c in data["items"] if c["kind"] == "card"])
     n_sc = len([c for c in data["items"] if c["kind"] == "scenario"])
+    n_read = len([c for c in data["items"] if c["kind"] == "read"])
     print("构建完成")
     print("  知识点 %d 个（已覆盖 %d，%.0f%%）" % (n_nodes, cov, cov * 100.0 / max(n_nodes, 1)))
-    print("  卡片 %d 篇，场景题 %d 道" % (n_cards, n_sc))
+    print("  卡片 %d 篇，场景题 %d 道，精读 %d 篇" % (n_cards, n_sc, n_read))
     print("  数据 %.0f KB → assets/data.js" % (size / 1024.0))
     print("  入口 %s" % os.path.join(DIST, "index.html"))
     return 0
