@@ -7,7 +7,7 @@ content/ 下的 markdown（带 YAML front-matter）→ 静态站点（index.html
 
 用法：
     python3 build.py            # 构建
-    python3 build.py --check    # 只校验 front-matter，不生成
+    python3 build.py --check    # 只校验（front-matter + 正文规范），不生成
 
 零第三方依赖，只用 Python 标准库。
 """
@@ -25,6 +25,38 @@ DIST = BASE
 ASSETS = os.path.join(DIST, "assets")
 
 TODAY = datetime.date.today().isoformat()
+
+# 30 秒简述的字数口径：只数汉字，标点、英文字母、数字、代码都不算
+BRIEF_MIN, BRIEF_MAX = 150, 250
+HAN_RE = re.compile(r"[\u4e00-\u9fff]")
+
+
+def han_count(text):
+    """只统计汉字数，与页面上念出来的字数一致。"""
+    return len(HAN_RE.findall(text))
+
+
+def brief_section(body):
+    """取出正文里 `## 30 秒简述` 段；没有该段返回 None。
+
+    只认行首的二级标题，代码块里的 `## ` 不算标题。
+    """
+    out, inside, fenced = [], False, False
+    for ln in body.split("\n"):
+        if ln.strip().startswith("```"):
+            fenced = not fenced
+            if inside:
+                out.append(ln)
+            continue
+        if not fenced and re.match(r"^##\s+", ln):
+            if inside:
+                break
+            if ln.strip() == "## 30 秒简述":
+                inside = True
+            continue
+        if inside:
+            out.append(ln)
+    return "\n".join(out) if inside else None
 
 
 # ---------------------------------------------------------------- front-matter
@@ -486,6 +518,21 @@ def build_data():
             if t not in node_ids:
                 problems.append("item %s 引用了不存在的知识点 %s" % (C["id"], t))
 
+    # 30 秒简述是复述骨架：字数不达标就没法背，直接算校验失败
+    for C in items:
+        sec = brief_section(C["_body"])
+        if sec is None:
+            problems.append("30 秒简述缺失：%s 没有「## 30 秒简述」段" % C["_file"])
+            continue
+        n = han_count(sec)
+        C["_brief"] = n
+        if n < BRIEF_MIN:
+            problems.append("30 秒简述不达标：%s 实际 %d 个汉字（要求 %d~%d，偏短 %d）"
+                            % (C["_file"], n, BRIEF_MIN, BRIEF_MAX, BRIEF_MIN - n))
+        elif n > BRIEF_MAX:
+            problems.append("30 秒简述不达标：%s 实际 %d 个汉字（要求 %d~%d，偏长 %d）"
+                            % (C["_file"], n, BRIEF_MIN, BRIEF_MAX, n - BRIEF_MAX))
+
     ids = [c["id"] for c in items]
     dup = {x for x in ids if ids.count(x) > 1}
     if dup:
@@ -565,20 +612,27 @@ def write_site(data):
 
 def main():
     data, problems = build_data()
+    n_brief = len([p for p in problems if p.startswith("30 秒简述")])
     if "--check" in sys.argv:
         if problems:
             print("⚠ 内容校验发现 %d 个问题：" % len(problems))
             for p in problems:
                 print("   -", p)
+            if n_brief:
+                print("\n其中 30 秒简述不在 %d~%d 汉字区间的 %d 篇（上方逐条列了文件名和字数）。"
+                      % (BRIEF_MIN, BRIEF_MAX, n_brief))
             return 1
-        print("校验通过：%d 个层 / %d 个知识点 / %d 篇内容" % (
-            len(data["layers"]), len(data["nodes"]), len(data["items"])))
+        print("校验通过：%d 个层 / %d 个知识点 / %d 篇内容（30 秒简述均 %d~%d 汉字）" % (
+            len(data["layers"]), len(data["nodes"]), len(data["items"]),
+            BRIEF_MIN, BRIEF_MAX))
         return 0
 
     if problems:
         print("⚠ 内容校验发现 %d 个问题：" % len(problems))
         for p in problems:
             print("   -", p)
+        if n_brief:
+            print("\n其中 30 秒简述不在 %d~%d 汉字区间的 %d 篇。" % (BRIEF_MIN, BRIEF_MAX, n_brief))
 
     size = write_site(data)
     n_nodes = len(data["nodes"])

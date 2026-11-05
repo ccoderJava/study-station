@@ -21,7 +21,7 @@
 
 ```bash
 python3 build.py           # 构建 index.html + assets/
-python3 build.py --check   # 只校验：必填字段、nodes 引用存在性、id 重复、layer 合法性
+python3 build.py --check   # 只校验：必填字段、nodes 引用存在性、id 重复、layer 合法性、30 秒简述汉字数
 make build / make check / make serve
 make pack                  # 构建 + 打包成 dist/offer-zhan-sha.zip（拷进内网用）
 ```
@@ -67,7 +67,7 @@ front-matter 字段与枚举的权威定义在 `FORMAT.md`，改字段先改那�
 ## 我的口述记录        ← 附加段，留给用户本人
 ```
 
-- `30 秒简述` 是复述骨架，150~250 字，结论在前，要能背着念。
+- `30 秒简述` 是复述骨架，**150~250 个汉字**（只数汉字，标点与英文数字不计；`build.py --check` 会卡这个区间），结论在最前，要能背着念。
 - `为什么这么设计` 必须写出代价，只讲优点等于没写。
 - `项目中如何使用` 必须落在真实项目上（某银行 C9→C10 重构、流量回放、资金安全加固；某支付公司清结算对账；某跨境电商支付中台）。写通用场景 = 这篇作废。
 - `三层追问` 要能扛住「是什么 → 为什么这么设计 → 不用会怎么样」的追问链。

@@ -15,7 +15,7 @@ updated: 2026-11-03
 
 ## 30 秒简述
 
-HashMap 是**数组 + 链表 + 红黑树**：容量固定为 2 的幂，索引用 `(n-1) & hash`，扰动函数把高 16 位异或到低位减少碰撞；负载因子 0.75，扩容翻倍并把节点按 `hash & oldCap` 拆成高低位两条链；单桶链表长度到 8 **且**容量 ≥ 64 才树化，退化阈值 6。ConcurrentHashMap 在 JDK 8 放弃了 Segment 分段锁，改成**桶级 `synchronized` + 空桶 CAS**，并发度从固定的 16 提升到桶数量级；size 用 `baseCount + CounterCell[]` 分散累加，因此是弱一致的。
+结论：HashMap 是**数组加链表加红黑树**，**容量必须是 2 的幂**才能用 `(n-1) & hash` 寻址；负载因子 0.75，扩容翻倍，节点按 `hash & oldCap` 拆成高低位两条链；链表到 8 且容量不小于 64 才树化，退化阈值是 6。ConcurrentHashMap 在 JDK 8 扔掉 Segment 分段锁，改成**空桶 CAS 加桶级 synchronized**，并发度从固定的 16 提升到桶数量级，size 用 baseCount 加 CounterCell 分散累加，所以**只能算弱一致**。代价是复合操作不再原子，`containsKey` 后再 `put` 这种 check-then-act 一样会超卖，得换 computeIfAbsent 或 merge。JDK 7 的 Segment 把并发度写死成 16，第 17 个线程就开始抢锁；另外不预设初始容量，对账文件百万级解析时会反复扩容，GC 抖动明显。
 
 ## 是什么
 

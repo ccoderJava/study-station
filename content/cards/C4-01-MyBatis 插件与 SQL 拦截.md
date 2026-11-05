@@ -15,7 +15,7 @@ updated: 2026-11-03
 
 ## 30 秒简述
 
-MyBatis 插件是**基于 JDK 动态代理的责任链**：`InterceptorChain.pluginAll()` 用 `Plugin.wrap()` 把四大核心对象（`Executor` / `StatementHandler` / `ParameterHandler` / `ResultSetHandler`）逐层包成代理，每个 `Interceptor` 用 `@Intercepts` + `@Signature` 声明要拦哪个对象的哪个方法。它让「加解密、脱敏、租户隔离、分页、慢 SQL 采集」这类横切逻辑不用改一行业务 SQL。代价是**SQL 语义被隐式改写**：count 语句、分页方言、参数类型都得自己兜住，出问题只能翻代理链。
+结论：MyBatis 插件是**基于 JDK 动态代理的责任链**，让脱敏、加解密、租户隔离、分页、慢 SQL 采集这些横切逻辑不用改业务 SQL，代价是 **SQL 被隐式改写**、出问题只能翻代理链。原理是 `InterceptorChain.pluginAll()` 用 `Plugin.wrap()` 把 Executor、StatementHandler、ParameterHandler、ResultSetHandler 四个核心对象逐层包成代理，每个插件用 `@Intercepts` 加 `@Signature` 声明拦谁；**后注册的在外层、先执行**，所以顺序一变结果就变。分页要放最外层才改得到最终 SQL，count 语句还得自己复制一份 MappedStatement。单字段语义优先用 TypeHandler，跨表横切才上插件；另外插件里再执行 SQL 会再次进代理链，容易递归到栈溢出，得用独立 SqlSession 规避。
 
 ## 是什么
 
