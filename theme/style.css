@@ -626,11 +626,8 @@ body.lb-open{overflow:hidden}
 .gr-go{font-size:11px;color:var(--faint);white-space:nowrap}
 .rdkw.weak{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
 
-/* 正文「回看 `E5-01 xxx`」被构建器转成站内卡片链接，视觉上跟普通 code 区分开 */
+/* 正文「回看 `E5-01 xxx`」转成站内卡片链接：低调的文字链，不抢正文 */
 a.cardref{
-  display:inline-block;border:1px solid #d6e3ff;background:#eef4ff;color:#1b4ea8;
-  border-radius:4px;padding:1px 6px;font-size:12.5px;text-decoration:none;
-  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  color:var(--acc);text-decoration:none;border-bottom:1px solid var(--acc-line);
 }
-a.cardref:hover{background:#dbe8ff;border-color:#a8c4ff;color:#123a86}
-a.cardref::after{content:" →";color:#6b8fd6}
+a.cardref:hover{color:#123a86;border-bottom-color:#123a86}
