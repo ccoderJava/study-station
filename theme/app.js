@@ -402,7 +402,8 @@
     }
 
     var recentReads = items.filter(isRead).sort(function (a, b) {
-      return readDate(a) < readDate(b) ? 1 : (readDate(a) > readDate(b) ? -1 : 0);
+      if (readDate(a) !== readDate(b)) return readDate(a) < readDate(b) ? 1 : -1;
+      return a.id < b.id ? 1 : (a.id > b.id ? -1 : 0);   /* 同一天读的，编号大的在前 */
     }).slice(0, 3);
     if (recentReads.length) {
       h += '<div class="sec"><h2>最近精读 <em>外部文章的拆解与判断</em></h2>';
@@ -1437,7 +1438,8 @@
   /* ------------------------------------------------------------ 精读 */
   function viewReads() {
     var rs = items.filter(isRead).sort(function (a, b) {
-      return readDate(a) < readDate(b) ? 1 : (readDate(a) > readDate(b) ? -1 : 0);
+      if (readDate(a) !== readDate(b)) return readDate(a) < readDate(b) ? 1 : -1;
+      return a.id < b.id ? 1 : (a.id > b.id ? -1 : 0);   /* 同一天读的，编号大的在前 */
     });
     var h = '<div class="hd"><h1>精读</h1><p>' + rs.length +
       ' 篇外部文章：先把原文讲清楚，再写自己的判断，最后落回站内卡片和项目。</p></div>';
