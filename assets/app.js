@@ -246,14 +246,64 @@
   function syncFoldBtn(dirs) {
     var btn = side.querySelector('#foldAll');
     if (!btn) return;
+    if (!dirs) dirs = orderedDirs(groupBy(items, 'direction'));
     var allClosed = dirs && dirs.length && dirs.every(function (d) { return folds[d]; });
     btn.textContent = allClosed ? '全部展开' : '全部折叠';
   }
-  function markSide() {
+
+  /* 当前文章滚进侧栏可视区；已看得见就不动，避免每次切页把侧栏抖一下 */
+  function revealCurrent(el) {
+    var bar = side.querySelector('.side-tools');
+    var ar = side.getBoundingClientRect();
+    /* 顶部工具条是 sticky 的，可视区要从它下沿算起 */
+    var padTop = (bar ? Math.max(0, bar.getBoundingClientRect().bottom - ar.top) : 0) + 6;
+    var er = el.getBoundingClientRect();
+    var top = ar.top + padTop, bottom = ar.bottom - 14;
+    if (!(er.top >= top && er.bottom <= bottom)) {
+      var room = (bottom - top) - er.height;
+      /* 目标是落在可视区中间偏上，四周都留出上下文 */
+      var delta = (er.top - top) - (room > 0 ? room * 0.4 : 0);
+      side.scrollTop = Math.max(0, side.scrollTop + delta);
+    }
+    /* 顺手把分类标题带出来：只看见一条高亮、看不见它挂在哪个目录下，等于没定位 */
+    var wrap = el.closest('.sgwrap');
+    var gd = wrap && wrap.querySelector('.sgroup');
+    if (!gd) return;
+    /* .sgroup 上内边距 16px，文字顶比元素顶低这么多 */
+    var headTop = gd.getBoundingClientRect().top + 16;
+    if (headTop < ar.top + padTop) side.scrollTop -= (ar.top + padTop - headTop);
+    var er2 = el.getBoundingClientRect();
+    if (er2.bottom > ar.bottom - 14) side.scrollTop += (er2.bottom - (ar.bottom - 14));
+  }
+
+  /* scroll:false 用于「进度变了」这类刷新，别把用户正看的侧栏拽走，也别强行展开他刚折起的组 */
+  function markSide(opts) {
     var id = currentCardId();
+    var reveal = !(opts && opts.scroll === false);
+    var cur = null;
     Array.prototype.forEach.call(side.querySelectorAll('.slink'), function (a) {
-      a.classList.toggle('on', a.dataset.id === id);
+      var hit = a.dataset.id === id;
+      a.classList.toggle('on', hit);
+      if (hit) cur = a;
     });
+    Array.prototype.forEach.call(side.querySelectorAll('.sgroup'), function (g) {
+      g.classList.remove('cur');
+    });
+    if (!cur) return;
+
+    var wrap = cur.parentNode;
+    if (wrap && wrap.classList.contains('sgwrap')) {
+      /* 当前文章藏在折叠组里时先展开：否则高亮了也看不见 */
+      if (reveal && wrap.classList.contains('closed')) {
+        wrap.classList.remove('closed');
+        var dir = wrap.getAttribute('data-dir');
+        if (dir) folds[dir] = false;   /* 只改内存里的本次状态，不动存档的折叠偏好 */
+        syncFoldBtn();
+      }
+      var gd = wrap.querySelector('.sgroup');
+      if (gd) gd.classList.add('cur');
+    }
+    if (reveal) revealCurrent(cur);
   }
   function currentCardId() {
     var p = parts();
@@ -1192,7 +1242,7 @@
           }
           dueEl.textContent = '下次复习 ' + e.due + (e.n ? ' · 第 ' + e.n + ' 次' : '');
         }
-        markSide();
+        markSide({ scroll: false });
       });
     });
   }
