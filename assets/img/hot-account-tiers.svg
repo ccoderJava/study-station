@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 660" width="100%" role="img">
+<title>热点账户的五档解法：按单账户峰值 TPS 逐级升级</title>
+<desc>五档从低到高。第一档低于 200 TPS 只需保证正确性；第二档 200 到 1000 做事务瘦身与按账户串行；第三档 1000 到 1 万做缓冲合并；第四档 1 万到 10 万拆子账户；第五档 10 万以上换内存账本，但只适用于平台自有资金。每一档标注适用量级、改什么、代价与收益，成本随档位非线性上升。</desc>
+<defs>
+  <marker id="ht1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#c2ccd8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+<g font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',Arial,sans-serif">
+
+  <text x="24" y="28" font-size="13.5" fill="#6b7684">单账户峰值 TPS 决定你在哪一档——不是「有没有高并发」</text>
+  <text x="24" y="48" font-size="11.5" fill="#98a2b0">往右每升一档，成本不是线性增加，是换一批要改的东西</text>
+
+  <!-- ============ 第 0 档 ============ -->
+  <g>
+    <rect x="22" y="66" width="176" height="26" rx="13" fill="#f1f4f7" stroke="#dfe5ec" stroke-width="1"/>
+    <text x="110" y="83" font-size="11" font-weight="600" text-anchor="middle" fill="#6b7684">&lt; 200 TPS</text>
+    <line x1="200" y1="79" x2="210" y2="79" stroke="#c2ccd8" stroke-width="1.4" marker-end="url(#ht1)"/>
+
+    <rect x="22" y="104" width="176" height="380" rx="9" fill="#fbfcfd" stroke="#e3e9f0" stroke-width="1.2"/>
+    <rect x="22" y="104" width="176" height="60" rx="9" fill="#eef2f6"/>
+    <rect x="22" y="140" width="176" height="24" fill="#eef2f6"/>
+    <text x="36" y="124" font-size="10" fill="#8b95a3">第 0 档 · 什么都不做</text>
+    <text x="36" y="146" font-size="13" font-weight="600" fill="#4a5563">只保正确性</text>
+
+    <text x="36" y="186" font-size="9.5" font-weight="600" fill="#9aa5b3">适用</text>
+    <text x="36" y="203" font-size="10.5" fill="#5c6875">绝大多数业务系统，</text>
+    <text x="36" y="219" font-size="10.5" fill="#5c6875">包括日订单几万的支付</text>
+
+    <text x="36" y="248" font-size="9.5" font-weight="600" fill="#9aa5b3">改什么</text>
+    <text x="36" y="265" font-size="10.5" fill="#5c6875">条件更新防超扣，</text>
+    <text x="36" y="281" font-size="10.5" fill="#5c6875">唯一索引做幂等，</text>
+    <text x="36" y="297" font-size="10.5" fill="#5c6875">余额与流水同事务</text>
+
+    <text x="36" y="342" font-size="9.5" font-weight="600" fill="#9aa5b3">代价</text>
+    <text x="36" y="359" font-size="10.5" fill="#3f7057">零</text>
+
+    <text x="36" y="420" font-size="9.5" font-weight="600" fill="#9aa5b3">收益</text>
+    <text x="36" y="437" font-size="10.5" fill="#5c6875">不出错，也不必</text>
+    <text x="36" y="453" font-size="10.5" fill="#5c6875">背上缓冲与对账的成本</text>
+
+  </g>
+
+  <!-- ============ 第 1 档 ============ -->
+  <g>
+    <rect x="212" y="66" width="176" height="26" rx="13" fill="#f1f8f4" stroke="#cfe4d9" stroke-width="1"/>
+    <text x="300" y="83" font-size="11" font-weight="600" text-anchor="middle" fill="#3f7057">200 ~ 1000 TPS</text>
+    <line x1="390" y1="79" x2="400" y2="79" stroke="#c2ccd8" stroke-width="1.4" marker-end="url(#ht1)"/>
+
+    <rect x="212" y="104" width="176" height="380" rx="9" fill="#fbfdfc" stroke="#d8e8e0" stroke-width="1.2"/>
+    <rect x="212" y="104" width="176" height="60" rx="9" fill="#e7f2ec"/>
+    <rect x="212" y="140" width="176" height="24" fill="#e7f2ec"/>
+    <text x="226" y="124" font-size="10" fill="#5d8a72">第 1 档 · 约一人周</text>
+    <text x="226" y="146" font-size="13" font-weight="600" fill="#2f5c46">缩事务 + 串行</text>
+
+    <text x="226" y="186" font-size="9.5" font-weight="600" fill="#7fa392">适用</text>
+    <text x="226" y="203" font-size="10.5" fill="#42544b">结算集中入账、</text>
+    <text x="226" y="219" font-size="10.5" fill="#42544b">分润批量下发</text>
+
+    <text x="226" y="248" font-size="9.5" font-weight="600" fill="#7fa392">改什么</text>
+    <text x="226" y="265" font-size="10.5" fill="#42544b">事务里只留两条 SQL</text>
+    <text x="226" y="281" font-size="10.5" fill="#42544b">RPC 与通知挪出去</text>
+    <text x="226" y="297" font-size="10.5" fill="#42544b">同账户 hash 到</text>
+    <text x="226" y="313" font-size="10.5" fill="#42544b">固定线程或 MQ 分区</text>
+
+    <text x="226" y="342" font-size="9.5" font-weight="600" fill="#7fa392">代价</text>
+    <text x="226" y="359" font-size="10.5" fill="#42544b">一个路由函数加一个</text>
+    <text x="226" y="375" font-size="10.5" fill="#42544b">队列，不改表结构</text>
+
+    <text x="226" y="420" font-size="9.5" font-weight="600" fill="#7fa392">收益</text>
+    <text x="226" y="437" font-size="10.5" fill="#42544b">持锁从 10ms 到 1ms</text>
+    <text x="226" y="453" font-size="10.5" fill="#42544b">吞吐近十倍</text>
+  </g>
+
+  <!-- ============ 第 2 档 ============ -->
+  <g>
+    <rect x="402" y="66" width="176" height="26" rx="13" fill="#eff5fd" stroke="#cfdff6" stroke-width="1"/>
+    <text x="490" y="83" font-size="11" font-weight="600" text-anchor="middle" fill="#2f6fd0">1 千 ~ 1 万 TPS</text>
+    <line x1="580" y1="79" x2="590" y2="79" stroke="#c2ccd8" stroke-width="1.4" marker-end="url(#ht1)"/>
+
+    <rect x="402" y="104" width="176" height="380" rx="9" fill="#fbfcfe" stroke="#d5e2f5" stroke-width="1.2"/>
+    <rect x="402" y="104" width="176" height="60" rx="9" fill="#e6effb"/>
+    <rect x="402" y="140" width="176" height="24" fill="#e6effb"/>
+    <text x="416" y="124" font-size="10" fill="#5b82b8">第 2 档 · 约一月</text>
+    <text x="416" y="146" font-size="13" font-weight="600" fill="#24538f">缓冲合并</text>
+
+    <text x="416" y="186" font-size="9.5" font-weight="600" fill="#7b9bc4">适用</text>
+    <text x="416" y="203" font-size="10.5" fill="#3d4f66">纯入账的热点，</text>
+    <text x="416" y="219" font-size="10.5" fill="#3d4f66">同一账户只加不减</text>
+
+    <text x="416" y="248" font-size="9.5" font-weight="600" fill="#7b9bc4">改什么</text>
+    <text x="416" y="265" font-size="10.5" fill="#3d4f66">明细只做 insert；</text>
+    <text x="416" y="281" font-size="10.5" fill="#3d4f66">按账户聚合后</text>
+    <text x="416" y="297" font-size="10.5" fill="#3d4f66">每 100ms 刷一次；</text>
+    <text x="416" y="313" font-size="10.5" fill="#3d4f66">批次号幂等可重放</text>
+
+    <text x="416" y="342" font-size="9.5" font-weight="600" fill="#7b9bc4">代价</text>
+    <text x="416" y="359" font-size="10.5" fill="#3d4f66">查询口径要改成</text>
+    <text x="416" y="375" font-size="10.5" fill="#3d4f66">余额加在途，且需</text>
+    <text x="416" y="391" font-size="10.5" fill="#3d4f66">财务认可延迟</text>
+
+    <text x="416" y="436" font-size="9.5" font-weight="600" fill="#7b9bc4">收益</text>
+    <text x="416" y="453" font-size="10.5" fill="#3d4f66">update 次数降到</text>
+    <text x="416" y="469" font-size="10.5" fill="#3d4f66">1/N，DB 松一个量级</text>
+  </g>
+
+  <!-- ============ 第 3 档 ============ -->
+  <g>
+    <rect x="592" y="66" width="176" height="26" rx="13" fill="#fdf6ee" stroke="#f3ddc2" stroke-width="1"/>
+    <text x="680" y="83" font-size="11" font-weight="600" text-anchor="middle" fill="#b45309">1 万 ~ 10 万 TPS</text>
+    <line x1="770" y1="79" x2="780" y2="79" stroke="#c2ccd8" stroke-width="1.4" marker-end="url(#ht1)"/>
+
+    <rect x="592" y="104" width="176" height="380" rx="9" fill="#fdfbf7" stroke="#f0dcc4" stroke-width="1.2"/>
+    <rect x="592" y="104" width="176" height="60" rx="9" fill="#f9ecdb"/>
+    <rect x="592" y="140" width="176" height="24" fill="#f9ecdb"/>
+    <text x="606" y="124" font-size="10" fill="#b87f45">第 3 档 · 一季</text>
+    <text x="606" y="146" font-size="13" font-weight="600" fill="#8f4a10">拆子账户</text>
+
+    <text x="606" y="186" font-size="9.5" font-weight="600" fill="#bd9469">适用</text>
+    <text x="606" y="203" font-size="10.5" fill="#5c4733">平台手续费户、</text>
+    <text x="606" y="219" font-size="10.5" fill="#5c4733">头部商户、持续热点</text>
+
+    <text x="606" y="248" font-size="9.5" font-weight="600" fill="#bd9469">改什么</text>
+    <text x="606" y="265" font-size="10.5" fill="#5c4733">一个逻辑户拆成</text>
+    <text x="606" y="281" font-size="10.5" fill="#5c4733">N 个物理子户；</text>
+    <text x="606" y="297" font-size="10.5" fill="#5c4733">取模路由，查余额求</text>
+    <text x="606" y="313" font-size="10.5" fill="#5c4733">和，出金须先汇总</text>
+
+    <text x="606" y="342" font-size="9.5" font-weight="600" fill="#bd9469">代价</text>
+    <text x="606" y="359" font-size="10.5" fill="#5c4733">改账户模型与对账</text>
+    <text x="606" y="375" font-size="10.5" fill="#5c4733">体系，子户间调拨</text>
+    <text x="606" y="391" font-size="10.5" fill="#5c4733">与冻结都变复杂</text>
+
+    <text x="606" y="436" font-size="9.5" font-weight="600" fill="#bd9469">收益</text>
+    <text x="606" y="453" font-size="10.5" fill="#5c4733">写并发随子户数</text>
+    <text x="606" y="469" font-size="10.5" fill="#5c4733">线性扩容</text>
+  </g>
+
+  <!-- ============ 第 4 档 ============ -->
+  <g>
+    <rect x="782" y="66" width="176" height="26" rx="13" fill="#fdf2f2" stroke="#f2cfcf" stroke-width="1"/>
+    <text x="870" y="83" font-size="11" font-weight="600" text-anchor="middle" fill="#b93636">&gt; 10 万 TPS</text>
+
+    <rect x="782" y="104" width="176" height="380" rx="9" fill="#fdfafa" stroke="#f0d4d4" stroke-width="1.2"/>
+    <rect x="782" y="104" width="176" height="60" rx="9" fill="#fae6e6"/>
+    <rect x="782" y="140" width="176" height="24" fill="#fae6e6"/>
+    <text x="796" y="124" font-size="10" fill="#b97070">第 4 档 · 半年起</text>
+    <text x="796" y="146" font-size="13" font-weight="600" fill="#8f2424">换账本</text>
+
+    <text x="796" y="186" font-size="9.5" font-weight="600" fill="#c28585">适用</text>
+    <text x="796" y="203" font-size="10.5" fill="#6b3838">营销预算池、积分、</text>
+    <text x="796" y="219" font-size="10.5" fill="#6b3838">平台自有资金</text>
+
+    <text x="796" y="248" font-size="9.5" font-weight="600" fill="#c28585">改什么</text>
+    <text x="796" y="265" font-size="10.5" fill="#6b3838">内存账本加异步</text>
+    <text x="796" y="281" font-size="10.5" fill="#6b3838">落库，或上专用</text>
+    <text x="796" y="297" font-size="10.5" fill="#6b3838">记账引擎；DB 只剩</text>
+    <text x="796" y="313" font-size="10.5" fill="#6b3838">持久化与对账</text>
+
+    <text x="796" y="342" font-size="9.5" font-weight="600" fill="#c28585">代价</text>
+    <text x="796" y="359" font-size="10.5" fill="#6b3838">最高：丢实时一致</text>
+    <text x="796" y="375" font-size="10.5" fill="#6b3838">性，出问题靠对账</text>
+    <text x="796" y="391" font-size="10.5" fill="#6b3838">回溯，审计要另做</text>
+
+    <text x="796" y="420" font-size="9.5" font-weight="600" fill="#c28585">收益</text>
+    <text x="796" y="437" font-size="10.5" fill="#6b3838">再上一个数量级</text>
+
+    <rect x="796" y="452" width="148" height="1" fill="#f0d4d4"/>
+    <text x="796" y="466" font-size="9.5" fill="#b93636">用户资金户不能这样</text>
+    <text x="796" y="478" font-size="9.5" fill="#b93636">做：账必须落库</text>
+  </g>
+
+  <!-- 底部 -->
+  <rect x="22" y="500" width="936" height="132" rx="9" fill="#f8fafc" stroke="#e6ecf3" stroke-width="1.2"/>
+  <text x="42" y="526" font-size="12.5" font-weight="600" fill="#31465f">升级的判据不是「感觉快扛不住了」，是三组数</text>
+  <text x="42" y="548" font-size="11.5" fill="#5c6875">① 压测出来的单账户上限（含真实事务长度，不是空表的数字）　② 峰值时是「一个账户热」还是「全站热」</text>
+  <text x="42" y="567" font-size="11.5" fill="#5c6875">③ 尖峰持续多久——持续几小时用拆账户，一分钟的尖峰用排队削峰就够</text>
+  <text x="42" y="594" font-size="11.5" fill="#a1706a">真实系统的热点大多落在 200 ~ 800 TPS：第 1 档就能收工，第 2 档是上限。跳到第 3 档换来的往往是更复杂的对账，而不是更高的可用性。</text>
+  <text x="42" y="613" font-size="11.5" fill="#a1706a">只有「扣款型」热点例外：它要判断余额是否充足，合并会掩盖单笔不足，只能走拆额度或串行，不能缓冲。</text>
+
+</g>
+</svg>

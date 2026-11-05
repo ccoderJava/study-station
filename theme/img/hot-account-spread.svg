@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 636" width="100%" role="img">
+<title>热点账户的故障扩散：从行锁排队到资金差错</title>
+<desc>六步链条。同账户并发更新导致行锁排队，等待线程占住连接池，同库其他账户查询也开始超时，故障从单个账户扩散到整个库；上游超时后自动重试，若没有幂等键就会重复入账，日终对账出现长款，多付的钱没有对应负债，最终冲减权益。每一步右侧标出可以在哪一层止血。</desc>
+<defs>
+  <marker id="hs1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#b9c4d2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+<g font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',Arial,sans-serif">
+
+  <text x="34" y="30" font-size="13.5" fill="#6b7684">一个热点行，怎么变成一次资金差错</text>
+  <text x="34" y="52" font-size="11.5" fill="#98a2b0">粗线是性能问题，最后一格才是账的问题——但它们在同一条链上</text>
+
+  <!-- 左侧竖线 -->
+  <line x1="88" y1="96" x2="88" y2="412" stroke="#e2e8f0" stroke-width="2"/>
+
+  <!-- 1 -->
+  <circle cx="88" cy="104" r="15" fill="#eff6ff" stroke="#93b4f5" stroke-width="1.4"/>
+  <text x="88" y="109" font-size="11.5" font-weight="700" text-anchor="middle" fill="#2f6fd0">1</text>
+  <rect x="120" y="80" width="300" height="48" rx="8" fill="#f6f9fe" stroke="#d6e3f8" stroke-width="1.2"/>
+  <text x="136" y="101" font-size="12.5" fill="#31465f">同一账户被 N 个请求同时更新</text>
+  <text x="136" y="118" font-size="11" fill="#8593a3">结算日集中入账、分润批量下发</text>
+  <rect x="448" y="80" width="418" height="48" rx="8" fill="#ffffff" stroke="#e6ecf3" stroke-width="1.1"/>
+  <text x="464" y="100" font-size="11.5" fill="#46505e">InnoDB 行锁是排他的，同一行只能串行改。</text>
+  <text x="464" y="117" font-size="11.5" fill="#a1706a">止血点：入口按账户维度限流，超出的快速失败</text>
+
+  <path d="M88 122L88 146" stroke="#b9c4d2" stroke-width="1.4" marker-end="url(#hs1)"/>
+
+  <!-- 2 -->
+  <circle cx="88" cy="168" r="15" fill="#fff7ed" stroke="#f0b775" stroke-width="1.4"/>
+  <text x="88" y="173" font-size="11.5" font-weight="700" text-anchor="middle" fill="#b45309">2</text>
+  <rect x="120" y="144" width="300" height="48" rx="8" fill="#fffbf5" stroke="#f6e2c8" stroke-width="1.2"/>
+  <text x="136" y="165" font-size="12.5" fill="#5c4733">等锁的线程堆积在锁队列里</text>
+  <text x="136" y="182" font-size="11" fill="#a98a68">单次 3ms → 单账户上限约 330 TPS</text>
+  <rect x="448" y="144" width="418" height="48" rx="8" fill="#ffffff" stroke="#e6ecf3" stroke-width="1.1"/>
+  <text x="464" y="164" font-size="11.5" fill="#46505e">等待本身不便宜：占着连接、占着线程栈。</text>
+  <text x="464" y="181" font-size="11.5" fill="#a1706a">止血点：事务瘦身，把 RPC 与日志挪出事务</text>
+
+  <path d="M88 186L88 210" stroke="#b9c4d2" stroke-width="1.4" marker-end="url(#hs1)"/>
+
+  <!-- 3 -->
+  <circle cx="88" cy="232" r="15" fill="#fef2f2" stroke="#eba5a5" stroke-width="1.4"/>
+  <text x="88" y="237" font-size="11.5" font-weight="700" text-anchor="middle" fill="#b93636">3</text>
+  <rect x="120" y="208" width="300" height="48" rx="8" fill="#fffafa" stroke="#f6d5d5" stroke-width="1.2"/>
+  <text x="136" y="229" font-size="12.5" fill="#6b3838">连接池被占满，同库其他账户也超时</text>
+  <text x="136" y="246" font-size="11" fill="#a87474">故障从「入账慢」升级为「整个服务不可用」</text>
+  <rect x="448" y="208" width="418" height="48" rx="8" fill="#ffffff" stroke="#e6ecf3" stroke-width="1.1"/>
+  <text x="464" y="228" font-size="11.5" fill="#46505e">这是扩散的关键一步：热点行不该独占连接。</text>
+  <text x="464" y="245" font-size="11.5" fill="#a1706a">止血点：读写连接池隔离，热点链路单独配额</text>
+
+  <path d="M88 250L88 274" stroke="#b9c4d2" stroke-width="1.4" marker-end="url(#hs1)"/>
+
+  <!-- 4 -->
+  <circle cx="88" cy="296" r="15" fill="#fef2f2" stroke="#eba5a5" stroke-width="1.4"/>
+  <text x="88" y="301" font-size="11.5" font-weight="700" text-anchor="middle" fill="#b93636">4</text>
+  <rect x="120" y="272" width="300" height="48" rx="8" fill="#fffafa" stroke="#f6d5d5" stroke-width="1.2"/>
+  <text x="136" y="293" font-size="12.5" fill="#6b3838">上游超时，自动重试同一笔</text>
+  <text x="136" y="310" font-size="11" fill="#a87474">「失败」和「没成功」在上游眼里是一回事</text>
+  <rect x="448" y="272" width="418" height="48" rx="8" fill="#ffffff" stroke="#e6ecf3" stroke-width="1.1"/>
+  <text x="464" y="292" font-size="11.5" fill="#46505e">性能问题的账单，往往记在正确性头上。</text>
+  <text x="464" y="309" font-size="11.5" fill="#a1706a">止血点：业务唯一键，重试幂等</text>
+
+  <path d="M88 314L88 338" stroke="#e3b7b7" stroke-width="1.6" marker-end="url(#hs1)"/>
+
+  <!-- 5 -->
+  <circle cx="88" cy="362" r="15" fill="#fdecec" stroke="#e08a8a" stroke-width="1.5"/>
+  <text x="88" y="367" font-size="11.5" font-weight="700" text-anchor="middle" fill="#a82f2f">5</text>
+  <rect x="120" y="338" width="300" height="48" rx="8" fill="#fdf5f5" stroke="#f0caca" stroke-width="1.3"/>
+  <text x="136" y="359" font-size="12.5" fill="#6b3838">同一笔被入账两次，余额虚增</text>
+  <text x="136" y="376" font-size="11" fill="#a87474">商户余额多了 100 万，钱并不存在</text>
+  <rect x="448" y="338" width="418" height="48" rx="8" fill="#ffffff" stroke="#e6ecf3" stroke-width="1.1"/>
+  <text x="464" y="358" font-size="11.5" fill="#46505e">应用层判重挡不住并发，唯一索引才挡得住。</text>
+  <text x="464" y="375" font-size="11.5" fill="#a1706a">止血点：明细表唯一索引兜底，冲突即丢弃</text>
+
+  <path d="M88 380L88 404" stroke="#e3b7b7" stroke-width="1.6" marker-end="url(#hs1)"/>
+
+  <!-- 6 -->
+  <circle cx="88" cy="428" r="15" fill="#fbe4e4" stroke="#d97a7a" stroke-width="1.5"/>
+  <text x="88" y="433" font-size="11.5" font-weight="700" text-anchor="middle" fill="#9b2828">6</text>
+  <rect x="120" y="404" width="300" height="48" rx="8" fill="#fdeeee" stroke="#efbfbf" stroke-width="1.3"/>
+  <text x="136" y="425" font-size="12.5" fill="#6b3838">日终对账出长款，多付的钱无处可抵</text>
+  <text x="136" y="442" font-size="11" fill="#a87474">没有对应负债，只能冲减权益</text>
+  <rect x="448" y="404" width="418" height="48" rx="8" fill="#ffffff" stroke="#e6ecf3" stroke-width="1.1"/>
+  <text x="464" y="424" font-size="11.5" fill="#46505e">多付 100 万，资产减负债的差额直接转负。</text>
+  <text x="464" y="441" font-size="11.5" fill="#a1706a">回滚点：日终对账 + 差错池，唯一的人工兜底</text>
+
+  <!-- 底部提示 -->
+  <rect x="34" y="480" width="832" height="72" rx="9" fill="#f8fafc" stroke="#e6ecf3" stroke-width="1.2"/>
+  <text x="54" y="505" font-size="12.5" font-weight="600" fill="#31465f">所以热点账户要解的从来不只是「慢」</text>
+  <text x="54" y="526" font-size="11.5" fill="#5c6875">前四步是性能，可以靠缓冲、拆分、限流缓解；后两步是账，只能靠幂等、唯一约束、对账守住。</text>
+  <text x="54" y="545" font-size="11.5" fill="#a1706a">把这两类问题混在一起答「上 Redis 缓冲」，就是这类题最常见的失分点。</text>
+
+</g>
+</svg>
