@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 596" width="100%" role="img">
+<title>上划与下拨的对称性：收钱一侧不用冻结，付钱一侧必须冻结</title>
+<desc>左列上划：钱从用户卡进入平台备付金户，平台是收款方，资产与负债同时增加，钱到了才记账，不需要冻结。右列下拨：钱从平台备付金户打给商户卡，平台是付款方，资产先减少、负债后减少，中间的时间差必须用冻结锁住负债，否则同一笔应付会被兑现两次。</desc>
+<defs>
+  <marker id="tf1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#7fa6c9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  <marker id="tf2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#c98d6a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+<g font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',Arial,sans-serif">
+
+  <text x="40" y="30" font-size="13.5" fill="#6b7684">同一笔钱的两个方向：收进来和付出去，会计处理并不对称</text>
+
+  <!-- 左列：上划 -->
+  <g>
+    <rect x="40" y="48" width="430" height="358" rx="10" fill="#f6fafd" stroke="#d6e5f2" stroke-width="1.2"/>
+    <rect x="40" y="48" width="430" height="34" rx="10" fill="#e3eef8"/>
+    <rect x="40" y="68" width="430" height="14" fill="#e3eef8"/>
+    <text x="58" y="70" font-size="13.5" font-weight="600" fill="#2f5b7d">上划 / 代扣归集　平台是收款方</text>
+
+    <rect x="62" y="102" width="106" height="46" rx="7" fill="#ffffff" stroke="#cfdffa" stroke-width="1.1"/>
+    <text x="115" y="122" font-size="12.5" text-anchor="middle" fill="#46505e">用户银行卡</text>
+    <text x="115" y="139" font-size="11" text-anchor="middle" fill="#8593a3">钱从这里出</text>
+
+    <path d="M170 125L246 125" fill="none" stroke="#7fa6c9" stroke-width="1.6" marker-end="url(#tf1)"/>
+    <text x="208" y="117" font-size="11" text-anchor="middle" fill="#5f7fa8">① 协议代扣</text>
+
+    <rect x="250" y="96" width="196" height="58" rx="7" fill="#e3eefc" stroke="#9dbcf0" stroke-width="1.3"/>
+    <text x="348" y="117" font-size="12.5" text-anchor="middle" fill="#12385f">平台备付金户</text>
+    <text x="348" y="136" font-size="11" text-anchor="middle" fill="#3d5f86">银行实体户 · 资产</text>
+
+    <path d="M348 158L348 196" fill="none" stroke="#7fa6c9" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#tf1)"/>
+    <text x="356" y="182" font-size="11" fill="#5f7fa8">钱到了才记账</text>
+
+    <rect x="250" y="200" width="196" height="72" rx="7" fill="#ffffff" stroke="#cfe6d8" stroke-width="1.2"/>
+    <text x="348" y="221" font-size="12.5" text-anchor="middle" fill="#2f6b46">商户内部户</text>
+    <text x="348" y="240" font-size="11" text-anchor="middle" fill="#4d7d63">虚拟户 · 负债</text>
+    <text x="348" y="259" font-size="11.5" text-anchor="middle" fill="#2f6b46">可用 +100</text>
+
+    <rect x="62" y="290" width="384" height="96" rx="7" fill="#ffffff" stroke="#e3e7ee" stroke-width="1"/>
+    <text x="78" y="312" font-size="11.5" fill="#6b7684">会计上两个动作同向：</text>
+    <text x="78" y="332" font-size="12" fill="#2f5b7d">资产 +100　负债 +100</text>
+    <text x="78" y="354" font-size="11.5" fill="#8593a3">钱没到就什么都不记（或记在途资产），</text>
+    <text x="78" y="372" font-size="11.5" fill="#8593a3">不存在「已承诺但没兑现」的负债</text>
+
+    <rect x="62" y="396" width="384" height="0" fill="none"/>
+  </g>
+
+  <!-- 右列：下拨 -->
+  <g>
+    <rect x="530" y="48" width="430" height="358" rx="10" fill="#fdfaf6" stroke="#f0e0cd" stroke-width="1.2"/>
+    <rect x="530" y="48" width="430" height="34" rx="10" fill="#f8ecdd"/>
+    <rect x="530" y="68" width="430" height="14" fill="#f8ecdd"/>
+    <text x="548" y="70" font-size="13.5" font-weight="600" fill="#8a5a30">下拨 / 结算出款　平台是付款方</text>
+
+    <rect x="552" y="102" width="196" height="58" rx="7" fill="#f8ecdd" stroke="#ddb98d" stroke-width="1.3"/>
+    <text x="650" y="123" font-size="12.5" text-anchor="middle" fill="#7a4a20">平台备付金户</text>
+    <text x="650" y="142" font-size="11" text-anchor="middle" fill="#9a7448">银行实体户 · 资产</text>
+
+    <path d="M752 125L828 125" fill="none" stroke="#c98d6a" stroke-width="1.6" marker-end="url(#tf2)"/>
+    <text x="790" y="117" font-size="11" text-anchor="middle" fill="#a1704a">② 银行代付</text>
+
+    <rect x="832" y="102" width="106" height="46" rx="7" fill="#ffffff" stroke="#e8d3b8" stroke-width="1.1"/>
+    <text x="885" y="122" font-size="12.5" text-anchor="middle" fill="#46505e">商户结算卡</text>
+    <text x="885" y="139" font-size="11" text-anchor="middle" fill="#8593a3">钱到这里</text>
+
+    <rect x="552" y="200" width="196" height="72" rx="7" fill="#ffffff" stroke="#f0c8c4" stroke-width="1.2"/>
+    <text x="650" y="221" font-size="12.5" text-anchor="middle" fill="#8a3a30">商户内部户</text>
+    <text x="650" y="240" font-size="11" text-anchor="middle" fill="#a1706a">虚拟户 · 负债</text>
+    <text x="650" y="259" font-size="11.5" text-anchor="middle" fill="#8a3a30">可用 −100　冻结 +100</text>
+
+    <path d="M650 196L650 160" fill="none" stroke="#c98d6a" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#tf2)"/>
+    <text x="658" y="184" font-size="11" fill="#a1704a">先冻结再出账</text>
+
+    <rect x="552" y="290" width="384" height="96" rx="7" fill="#ffffff" stroke="#e3e7ee" stroke-width="1"/>
+    <text x="568" y="312" font-size="11.5" fill="#6b7684">会计上两个动作反向：</text>
+    <text x="568" y="332" font-size="12" fill="#8a5a30">资产 −100　负债 −100</text>
+    <text x="568" y="354" font-size="11.5" fill="#8593a3">资产先减、负债后减，中间隔着银行回执，</text>
+    <text x="568" y="372" font-size="11.5" fill="#8593a3">这段时间负债必须锁住，否则会被再兑现一次</text>
+  </g>
+
+  <!-- 底部对比 -->
+  <line x1="40" y1="430" x2="960" y2="430" stroke="#e3e7ee" stroke-width="1" stroke-dasharray="4 4"/>
+
+  <g>
+    <rect x="40" y="446" width="430" height="60" rx="8" fill="#f1f8f3" stroke="#cfe6d8" stroke-width="1.2"/>
+    <text x="58" y="470" font-size="13" font-weight="600" fill="#2f6b46">✓ 不需要冻结</text>
+    <text x="58" y="492" font-size="11.5" fill="#4d7d63">钱到账才确认负债，晚记一会儿不产生任何风险</text>
+  </g>
+
+  <g>
+    <rect x="530" y="446" width="430" height="60" rx="8" fill="#fdf1f0" stroke="#f0c8c4" stroke-width="1.2"/>
+    <text x="548" y="470" font-size="13" font-weight="600" fill="#8a3a30">✕ 必须冻结</text>
+    <text x="548" y="492" font-size="11.5" fill="#a1706a">钱要先出去，负债只能先锁住，等回执再减</text>
+  </g>
+
+  <g>
+    <rect x="40" y="522" width="920" height="52" rx="8" fill="#fbfcfe" stroke="#e3e7ee" stroke-width="1"/>
+    <text x="58" y="544" font-size="12.5" fill="#46505e">一句话：冻结是付款方的自我保护——谁往外掏钱，谁就要先锁住这笔负债。</text>
+    <text x="58" y="563" font-size="11.5" fill="#8593a3">收款方只需要延迟确认负债，付款方必须在资产减少之前把负债变成「不可动用」。</text>
+  </g>
+
+</g>
+</svg>
