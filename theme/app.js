@@ -1607,7 +1607,10 @@
     items.forEach(function (it) {
       var hay = (it.id + ' ' + it.title + ' ' + it.nodes.join(' ') + ' ' + it.direction + ' ' + it.event + ' ' +
         (it.src ? it.src.site + ' ' + it.src.author : '') + ' ' +
-        (it.itv ? ' ' + (it.itv.focus || '') + ' ' + (it.itv.gaps || []).join(' ') : '') + ' ' + it.excerpt).toLowerCase();
+        (it.itv ? ' ' + (it.itv.focus || '') + ' ' + (it.itv.gaps || []).join(' ') + ' ' +
+          /* gaps 存的是节点 id，查漏时用户更常按中文名搜，两边都进索引 */
+          (it.itv.gaps || []).map(function (g) { return (nodeById[g] || {}).name || ''; }).join(' ') : '') +
+        ' ' + it.excerpt).toLowerCase();
       if (hay.indexOf(kw) > -1) {
         res.push({ href: '#/card/' + it.id, t: it.title, m: (it.kind === 'scenario' ? '场景题' : isRead(it) ? '精读' : isInterview(it) ? '面试' : '卡片') + ' · ' + it.direction + ' · ' + it.nodes.join(' ') });
       }
