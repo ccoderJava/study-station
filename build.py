@@ -464,6 +464,92 @@ def excerpt(md, limit=72):
     return ""
 
 
+# ------------------------------------------------------------------- 语气检查
+# 规范在 FORMAT.md 5.1：像跟同事讲，不像交报告。
+# 光写文档没用，得让构建器说话：存量欠账记在 tone-baseline.json，只卡新增；
+# 改顺一篇就 `--tone-baseline` 收紧一次，基线只准降。
+
+TONE_RULES = [
+    # (规则名, 正则, 每篇允许次数)
+    ("总结腔",   r"总而言之|综上所述|概而言之|由此可见|一句话(?:结论|总结)", 0),
+    ("报幕腔",   r"核心在于|答案很(?:简单|直接)", 0),
+    ("强调腔",   r"(?:值得|需要)(?:注意|强调|说明|一提)的是", 0),
+    ("空转腔",   r"这恰恰(?:说明|印证)|某种意义上|某种程度上", 0),
+    ("递进套话", r"不仅仅是[^。！？\n]{0,40}?更是", 0),
+    ("黑话",     r"赋能|抓手|组合拳|颗粒度|护城河|飞轮效应", 0),
+    ("三段排比", r"更[^。，、\n]{1,5}、更[^。，、\n]{1,5}、更", 0),
+    ("本质是",   r"本质(?:上|就)?是", 1),
+    ("首先其次", r"首先|其次", 1),
+    ("不是A而是B", r"不是[^。！？\n]{0,30}?，?而是", 1),
+    ("句首最后", r"(?:^|[。！？；\n]|，)最后[，、]", 1),
+]
+
+TONE_BASELINE = os.path.join(BASE, "tone-baseline.json")
+
+
+def tone_text(body):
+    """取出需要检查语气的正文。
+
+    代码块不算腔调（那是代码）；`## 我的口述记录` 之后是用户自己写的，不归 agent 管。
+    """
+    text = re.sub(r"```.*?```", "", body, flags=re.S)
+    cut = text.find("## 我的口述记录")
+    return text[:cut] if cut >= 0 else text
+
+
+def tone_scan(body):
+    """返回 {规则名: {"n": 次数, "hit": 第一处命中的片段}}。"""
+    text = tone_text(body)
+    hits = {}
+    for name, pat, _ in TONE_RULES:
+        found = list(re.finditer(pat, text))
+        if found:
+            at = found[0].start()
+            hits[name] = {"n": len(found),
+                          "hit": text[max(0, at - 12):at + 18].replace("\n", " ")}
+    return hits
+
+
+def load_tone_baseline():
+    if not os.path.exists(TONE_BASELINE):
+        return {}
+    try:
+        return json.load(open(TONE_BASELINE, encoding="utf-8")).get("files", {})
+    except (ValueError, OSError):
+        return {}
+
+
+def save_tone_baseline(files_counts):
+    """files_counts: {相对路径: {规则名: 次数}}，只写非零项。"""
+    out = {"note": "语气检查的存量欠账。生成的，别手改；改顺手了就 python3 build.py --tone-baseline 收紧。",
+           "files": {k: v for k, v in sorted(files_counts.items()) if v}}
+    open(TONE_BASELINE, "w", encoding="utf-8").write(
+        json.dumps(out, ensure_ascii=False, indent=1, sort_keys=True) + "\n")
+
+
+def tone_report(items, baseline, problems):
+    """把超基线的命中写进 problems，返回（欠账篇数, 欠账处数）。
+
+    允许量 = max(该规则阈值, 基线)。基线是历史欠账的豁免，不是新内容的额度。
+    """
+    limits = {name: lim for name, _, lim in TONE_RULES}
+    debt_files = debt_hits = 0
+    for C in items:
+        path = C["_file"]
+        hits = tone_scan(C["_body"])
+        if hits:
+            debt_files += 1
+            debt_hits += sum(v["n"] for v in hits.values())
+        base = baseline.get(path, {})
+        for name, v in hits.items():
+            allowed = max(limits.get(name, 0), base.get(name, 0))
+            if v["n"] > allowed:
+                problems.append(
+                    "语气超基线：%s 有 %d 处「%s」（上限 %d，如「%s」）"
+                    % (path, v["n"], name, allowed, v["hit"]))
+    return debt_files, debt_hits
+
+
 # ------------------------------------------------------------------- 加载内容
 
 def load_dir(sub):
@@ -562,6 +648,9 @@ def build_data():
                     or os.path.exists(os.path.join(BASE, src))):
                 problems.append("%s 引用的插图不存在: %s" % (obj["id"], src))
 
+    # 语气：存量记基线，只有超配额的新句子才算错
+    tone_files, tone_hits = tone_report(items, load_tone_baseline(), problems)
+
     data = {
         "generated": TODAY,
         "layers": [{"id": l["id"], "name": l["name"], "role": l.get("role", ""),
@@ -579,7 +668,7 @@ def build_data():
                    "updated": c.get("updated", ""), "html": c["_html"],
                    "toc": c["_toc"], "excerpt": c["_excerpt"]} for c in items],
     }
-    return data, problems
+    return data, problems, (tone_files, tone_hits)
 
 
 # ------------------------------------------------------------------- 生成站点
@@ -610,9 +699,55 @@ def write_site(data):
     return len(payload)
 
 
+def tone_limits():
+    return {name: lim for name, _, lim in TONE_RULES}
+
+
+def tone_rows(items):
+    """逐条列出语气命中：(规则名, 文件, 次数, 片段)，供 --tone 查看。"""
+    rows = []
+    for C in items:
+        for name, v in tone_scan(C["_body"]).items():
+            rows.append((name, C["_file"], v["n"], v["hit"]))
+    return rows
+
+
 def main():
-    data, problems = build_data()
+    data, problems, (tone_files, tone_hits) = build_data()
     n_brief = len([p for p in problems if p.startswith("30 秒简述")])
+    n_tone = len([p for p in problems if p.startswith("语气超基线")])
+
+    # 收紧 / 重建语气基线
+    if "--tone-baseline" in sys.argv:
+        items = load_dir("cards") + load_dir("scenarios")
+        counts = {C["_file"]: {k: v["n"] for k, v in tone_scan(C["_body"]).items()}
+                  for C in items}
+        save_tone_baseline(counts)
+        print("语气基线已更新：欠账 %d 篇 / %d 处" % (tone_files, tone_hits))
+        if tone_hits:
+            print("  改完的篇目已从基线里去掉，剩下的下次接着改（--tone 看清单）")
+        return 0
+
+    # 只看语气
+    if "--tone" in sys.argv:
+        items = load_dir("cards") + load_dir("scenarios")
+        rows = tone_rows(items)
+        if not rows:
+            print("语气干净：没有命中任何规则（FORMAT.md 5.1）")
+            return 0
+        limits = tone_limits()
+        per = {}
+        for name, _f, n, _h in rows:
+            per[name] = per.get(name, 0) + n
+        print("语气欠账：%d 篇 / %d 处（基线内的存量，改顺手就清，别新增）"
+              % (len({f for _n, f, _c, _h in rows}), sum(per.values())))
+        for name, n in sorted(per.items(), key=lambda x: -x[1]):
+            print("\n[%s] %d 处，每篇上限 %d" % (name, n, limits.get(name, 0)))
+            for nm, f, c, h in rows:
+                if nm == name:
+                    print("   %-46s ×%d  …%s…" % (f, c, h))
+        return 0
+
     if "--check" in sys.argv:
         if problems:
             print("⚠ 内容校验发现 %d 个问题：" % len(problems))
@@ -621,10 +756,16 @@ def main():
             if n_brief:
                 print("\n其中 30 秒简述不在 %d~%d 汉字区间的 %d 篇（上方逐条列了文件名和字数）。"
                       % (BRIEF_MIN, BRIEF_MAX, n_brief))
+            if n_tone:
+                print("\n其中 %d 条是语气超配额（规范在 FORMAT.md 5.1）。\n"
+                      "改法：那几个词删掉，用具体的事重写这句；确实不该改就跑 "
+                      "`python3 build.py --tone-baseline` 显式放宽（diff 里看得见）。" % n_tone)
             return 1
         print("校验通过：%d 个层 / %d 个知识点 / %d 篇内容（30 秒简述均 %d~%d 汉字）" % (
             len(data["layers"]), len(data["nodes"]), len(data["items"]),
             BRIEF_MIN, BRIEF_MAX))
+        print("  语气：未新增命中；存量欠账 %d 篇 / %d 处（python3 build.py --tone 看清单）"
+              % (tone_files, tone_hits))
         return 0
 
     if problems:
