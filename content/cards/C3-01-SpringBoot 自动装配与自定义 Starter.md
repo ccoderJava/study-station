@@ -15,7 +15,7 @@ updated: 2026-11-03
 
 ## 30 秒简述
 
-结论：自动装配的本质是「**条件的集合加约定的路径**」，核心价值是**把装配决策从代码搬到条件表达式**。`@EnableAutoConfiguration` 通过 `AutoConfigurationImportSelector` 读类路径下的 AutoConfiguration.imports（Boot 2.7 之前是 spring.factories），拿到一批配置类，再用 `@ConditionalOnClass`、`@ConditionalOnMissingBean`、`@ConditionalOnProperty` **逐个判断该不该生效**，最后用 `@ConfigurationProperties` 绑定外部配置。自定义 Starter 就是把这套机制封成「引依赖加写配置就能用」的能力包，业务方零代码接入。代价是**装配过程隐式**，出问题得靠启动参数 --debug 看条件评估报告，或 actuator 的 conditions 端点反查；同一份依赖在不同环境或不同渠道下能装配出不同实现，这也是它的价值所在。
+结论：自动装配就是「**条件的集合加约定的路径**」，核心价值是**把装配决策从代码搬到条件表达式**。`@EnableAutoConfiguration` 通过 `AutoConfigurationImportSelector` 读类路径下的 AutoConfiguration.imports（Boot 2.7 之前是 spring.factories），拿到一批配置类，再用 `@ConditionalOnClass`、`@ConditionalOnMissingBean`、`@ConditionalOnProperty` **逐个判断该不该生效**，最后用 `@ConfigurationProperties` 绑定外部配置。自定义 Starter 就是把这套机制封成「引依赖加写配置就能用」的能力包，业务方零代码接入。代价是**装配过程隐式**，出问题得靠启动参数 --debug 看条件评估报告，或 actuator 的 conditions 端点反查；同一份依赖在不同环境或不同渠道下能装配出不同实现，这也是它的价值所在。
 
 ## 是什么
 

@@ -140,7 +140,7 @@ Pod 滚动发布或重启时的真实时序：
 - MyBatis 包一层：`CannotGetJdbcConnectionException: Failed to obtain JDBC Connection`
 - Druid：`dataSource already closed`
 
-**真正危险的不是这一轮失败，而是失败之后代码怎么写的。** 很多人是这么写的：
+**真正危险的是这一轮失败之后代码怎么写的。** 很多人是这么写的：
 
 ```java
 // 危险写法：查询结果为空时，把上一版有效配置覆盖掉
@@ -200,7 +200,7 @@ public void refresh() {
 
 注意它的边界：只对**非懒加载的单例**生效——`@Lazy` 的 bean 不在预实例化范围内，这时候要显式 `getBean()` 触发一次。另外这个回调是同步的，跑多久启动就慢多久；首轮加载本来就该等，但别在这里做全量预热之类的大活。
 
-`@PostConstruct` 不是不用，而是**分工**：它负责本组件自己的初始化（建缓存容器、建调度器但不启动、校验参数），首轮查库放 `afterSingletonsInstantiated()`。
+`@PostConstruct` 还在用，只是**分工**：它负责本组件自己的初始化（建缓存容器、建调度器但不启动、校验参数），首轮查库放 `afterSingletonsInstantiated()`。
 
 ```java
 @Component
@@ -405,7 +405,7 @@ T0+30s    terminationGracePeriodSeconds 到期 → SIGKILL（兜底，不触发�
 | JVM `shutdown hook` | 退出前统一收尾 | 不保证执行完（强杀不触发），`kill -9` 直接跳过 |
 | K8s CronJob / Sidecar | 证书轮换、配置同步等平台级工作 | 进程内彻底无状态，但多一个部署单元和一层运维 |
 
-选型顺序：**优先交给容器或平台（Spring 生命周期、K8s），其次才是自己起线程**。自己起线程时，先问一句「这个线程被杀掉会不会丢数据」，再决定 daemon 与否。
+选型顺序：**优先交给容器或平台（Spring 生命周期、K8s），自己起线程放最后**。自己起线程时，先问一句「这个线程被杀掉会不会丢数据」，再决定 daemon 与否。
 
 ## 项目中如何使用
 

@@ -19,12 +19,12 @@ ThreadLocal 提供的是「每个线程一份副本」，但数据并不在 Thre
 
 ## 是什么
 
-一句话：**ThreadLocal 不是「线程本地变量」，而是「以线程为作用域的隐式参数」**——它省掉的是方法签名上的层层传参，代价是把数据的生命周期交给了线程。
+一句话：**ThreadLocal 是「以线程为作用域的隐式参数」，不是「线程本地变量」**——它省掉的是方法签名上的层层传参，代价是把数据的生命周期交给了线程。
 
 - 数据结构：`Thread` → `threadLocals`（`ThreadLocalMap`）→ `Entry[] table`；`Entry extends WeakReference<ThreadLocal<?>>`，另有一个 `Object value` 字段强引用业务对象。
 - 一个 ThreadLocal 实例对应每个线程里的一个槽位，所以「同一个 ThreadLocal，不同线程读到不同的值」。
 - 三个 API 的语义：`set` 写入当前线程的 map、`get` 读当前线程的 map（没存过就 `setInitialValue()`）、`remove` 删掉当前线程的这个槽位并把 value 置 null。
-- 泄漏的本质不是「弱引用不管用」，而是 **Entry 数组随线程存活，而清理只发生在下一次读写时**。
+- 泄漏的根源是 **Entry 数组随线程存活，清理只发生在下一次读写时**，弱引用本身不背这个锅。
 
 ![ThreadLocal 的引用链：key 是弱引用、value 是强引用，泄漏与否取决于线程活多久](img/threadlocal-ref-chain.svg)
 
@@ -140,7 +140,7 @@ if (!cleanSomeSlots(i, ++size) && size >= threshold) rehash();  // 顺带清理 
 
 ![一次请求里上下文的生命周期：注入、同线程读取、异步断点、出口清理](img/threadlocal-lifecycle.svg)
 
-图里最重要的不是四个方框，而是**红色那个断点**：请求线程和异步线程是两个 Thread，两个 `threadLocals`，天然不共享。
+图里真正要盯的是**红色那个断点**：请求线程和异步线程是两个 Thread，两个 `threadLocals`，天然不共享。
 
 | 方式 | 能不能覆盖线程池 | 原理 | 代价 |
 |---|---|---|---|
