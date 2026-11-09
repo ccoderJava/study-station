@@ -411,10 +411,10 @@
     if (weak.length) {
       h += '<div class="sec"><h2>面试暴露的缺口 <em>按被点名次数排，点开直接去补</em></h2><div class="gapgrid">';
       weak.forEach(function (g) {
-        var href = g.cards.length ? '#/card/' + g.cards[0] : '#/node/' + g.id;
+        var href = g.target ? '#/card/' + g.target : '#/node/' + g.id;
         h += '<a class="gaprow" href="' + href + '"><span class="gr-n">' + g.n + ' 次</span>' +
           '<span class="gr-t">' + esc(g.name) + '</span>' +
-          '<span class="gr-go">' + (g.cards.length ? '去补卡片 →' : '看知识点 →') + '</span></a>';
+          '<span class="gr-go">' + (g.target ? '去补卡片 →' : '看知识点 →') + '</span></a>';
       });
       h += '</div><div class="morebar"><a class="btn" href="#/interviews">看全部面试记录</a></div></div>';
     }
@@ -1536,7 +1536,13 @@
     });
     return Object.keys(m).map(function (id) {
       var n = nodeById[id];
-      return { id: id, name: n ? n.name : id, n: m[id], cards: n ? (n.cards || []) : [] };
+      var list = n ? (n.cards || []) : [];
+      /* 挂了多个节点的领域总览卡不该抢走补缺口入口，优先 primary 就是本节点的专题卡片 */
+      var own = list.filter(function (c) {
+        var it = itemById[c]; return it && it.primary === id;
+      });
+      return { id: id, name: n ? n.name : id, n: m[id], cards: list,
+               target: own.length ? own[0] : (list[0] || '') };
     }).sort(function (a, b) { return b.n - a.n || (a.id < b.id ? -1 : 1); });
   }
   function viewInterviews() {
@@ -1553,10 +1559,10 @@
     if (weak.length) {
       h += '<div class="gapgrid">';
       weak.forEach(function (g) {
-        var href = g.cards.length ? '#/card/' + g.cards[0] : '#/node/' + g.id;
+        var href = g.target ? '#/card/' + g.target : '#/node/' + g.id;
         h += '<a class="gaprow" href="' + href + '"><span class="gr-n">' + g.n + ' 次</span>' +
           '<span class="gr-t">' + esc(g.name) + '</span>' +
-          '<span class="gr-go">' + (g.cards.length ? '去补卡片 →' : '看知识点 →') + '</span></a>';
+          '<span class="gr-go">' + (g.target ? '去补卡片 →' : '看知识点 →') + '</span></a>';
       });
       h += '</div>';
     } else {

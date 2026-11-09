@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 860" width="100%" role="img">
+<title>三方支付两条资金链：三层编码路由、清算场次分叉，以及原图未定义的边界</title>
+<desc>按理解重画的架构图。上带是实时指令链，五个领域从左到右，业务产品码、支付编码、清算编码加业务产品码加平台分别落在产品、支付、清结算三步；清算指令自带借贷分录，进入清算场次后按资金语义分流。中带左半是内场，多条结算指令汇总轧差后进储值系统与会计系统；右半是外场，逐笔走渠道路由、渠道订单到外部渠道并接回盘。两半旁边用虚线框标出原图未定义的场次时间语义、账务一致性、渠道降级与超时冲正反向流。下带是事后核算与对账，会计核算走凭证到报表，资金对账用未达账项调出余额调节表，交易对账把入账流水与清算流水核到汇总确认并接差错池。</desc>
+<defs>
+  <marker id="pa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#8aa5bd" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  <marker id="pr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#d98a8a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+<g font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',Arial,sans-serif">
+
+  <text x="24" y="26" font-size="13" fill="#2f5b7d" font-weight="600">按编码路由与内外场资金语义重画：十个领域收成两条资金链</text>
+  <text x="1056" y="26" font-size="11.5" fill="#6b7684" text-anchor="end">实线 原图正向流　虚线 补的收口路径　红字 未定义边界</text>
+
+  <!-- ① 实时指令链 -->
+  <rect x="20" y="44" width="1040" height="150" rx="10" fill="#f5f9fe" stroke="#d9e6f4" stroke-width="1.2"/>
+  <text x="38" y="70" font-size="15" font-weight="600" fill="#2f5b7d">① 实时指令链　业务 → 单据 → 指令，编码是每一步的路由键</text>
+
+  <g>
+    <rect x="38" y="84" width="180" height="70" rx="8" fill="#ffffff" stroke="#cddcec" stroke-width="1.2"/>
+    <text x="52" y="106" font-size="13" font-weight="600" fill="#2f5b7d">产品领域</text>
+    <text x="52" y="128" font-size="11.5" fill="#3c4b5a">收单 · 红包 · 担保交易</text>
+    <text x="52" y="146" font-size="11" fill="#6b7684">业务产品码</text>
+
+    <rect x="244" y="84" width="180" height="70" rx="8" fill="#ffffff" stroke="#cddcec" stroke-width="1.2"/>
+    <text x="258" y="106" font-size="13" font-weight="600" fill="#2f5b7d">交易领域</text>
+    <text x="258" y="128" font-size="11.5" fill="#3c4b5a">交易订单</text>
+    <text x="258" y="146" font-size="11" fill="#6b7684">按业务产品码生成</text>
+
+    <rect x="450" y="84" width="180" height="70" rx="8" fill="#ffffff" stroke="#cddcec" stroke-width="1.2"/>
+    <text x="464" y="106" font-size="13" font-weight="600" fill="#2f5b7d">支付领域</text>
+    <text x="464" y="128" font-size="11.5" fill="#3c4b5a">支付订单 → 支付指令</text>
+    <text x="464" y="146" font-size="11" fill="#6b7684">支付编码</text>
+
+    <rect x="656" y="84" width="180" height="70" rx="8" fill="#ffffff" stroke="#cddcec" stroke-width="1.2"/>
+    <text x="670" y="106" font-size="13" font-weight="600" fill="#2f5b7d">清结算领域</text>
+    <text x="670" y="128" font-size="11.5" fill="#3c4b5a">清算协议：覆写账户、场次</text>
+    <text x="670" y="146" font-size="11" fill="#1b4ea8">清算编码 + 产品码 + 平台</text>
+
+    <rect x="862" y="84" width="180" height="70" rx="8" fill="#ffffff" stroke="#cddcec" stroke-width="1.2"/>
+    <text x="876" y="106" font-size="13" font-weight="600" fill="#2f5b7d">清算指令</text>
+    <text x="876" y="128" font-size="11.5" fill="#3c4b5a">借：xxx账户 xx元</text>
+    <text x="876" y="146" font-size="11.5" fill="#3c4b5a">贷：xxx账户 xx元</text>
+
+    <line x1="220" y1="119" x2="240" y2="119" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+    <line x1="426" y1="119" x2="446" y2="119" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+    <line x1="632" y1="119" x2="652" y2="119" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+    <line x1="838" y1="119" x2="858" y2="119" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+  </g>
+  <text x="38" y="178" font-size="12" fill="#6b7684">三个键分别落在产品、支付、清结算三步；新增业务产品只加一套清算协议，主链路不动。指令生成时就带借贷。</text>
+
+  <!-- 清算场次分叉走廊 -->
+  <line x1="952" y1="154" x2="952" y2="188" stroke="#8aa5bd" stroke-width="1.5"/>
+  <rect x="880" y="188" width="144" height="28" rx="14" fill="#e8f0fe" stroke="#c3d7fb"/>
+  <text x="952" y="207" font-size="12.5" fill="#1b4ea8" text-anchor="middle" font-weight="600">清算场次</text>
+  <line x1="952" y1="216" x2="952" y2="232" stroke="#8aa5bd" stroke-width="1.5"/>
+  <line x1="170" y1="232" x2="952" y2="232" stroke="#8aa5bd" stroke-width="1.5"/>
+  <circle cx="170" cy="232" r="3" fill="#8aa5bd"/>
+  <circle cx="730" cy="232" r="3" fill="#8aa5bd"/>
+  <line x1="170" y1="232" x2="170" y2="266" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+  <line x1="730" y1="232" x2="730" y2="266" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+  <text x="180" y="226" font-size="11.5" fill="#0f766e">内场：内部划拨，可轧差</text>
+  <text x="540" y="226" font-size="11.5" fill="#6b7684">按资金语义分流</text>
+  <text x="740" y="226" font-size="11.5" fill="#a16207">外场：真出款，逐笔</text>
+
+  <!-- ② 内场 -->
+  <rect x="20" y="270" width="510" height="278" rx="10" fill="#f2faf7" stroke="#c9e8dc" stroke-width="1.2"/>
+  <text x="38" y="296" font-size="15" font-weight="600" fill="#0f766e">② 内场　多条结算指令压成一个净额</text>
+  <g>
+    <rect x="38" y="310" width="264" height="48" rx="7" fill="#ffffff" stroke="#bfe3dc"/>
+    <text x="52" y="329" font-size="13" font-weight="600" fill="#22543d">结算指令 × N</text>
+    <text x="52" y="347" font-size="11.5" fill="#6b7684">内场场次，多条待轧差</text>
+    <line x1="170" y1="358" x2="170" y2="368" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+
+    <rect x="38" y="370" width="264" height="48" rx="7" fill="#ffffff" stroke="#bfe3dc"/>
+    <text x="52" y="389" font-size="13" font-weight="600" fill="#22543d">汇总轧差</text>
+    <text x="52" y="407" font-size="11.5" fill="#6b7684">多笔 → 一个净额，热点账户在这</text>
+    <line x1="170" y1="418" x2="170" y2="428" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+
+    <rect x="38" y="430" width="264" height="48" rx="7" fill="#ffffff" stroke="#bfe3dc"/>
+    <text x="52" y="449" font-size="13" font-weight="600" fill="#22543d">储值系统</text>
+    <text x="52" y="467" font-size="11.5" fill="#6b7684">账户 +xx 元 / -xx 元</text>
+    <line x1="170" y1="478" x2="170" y2="488" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+
+    <rect x="38" y="490" width="264" height="48" rx="7" fill="#ffffff" stroke="#bfe3dc"/>
+    <text x="52" y="509" font-size="13" font-weight="600" fill="#22543d">会计系统</text>
+    <text x="52" y="527" font-size="11.5" fill="#6b7684">借 / 贷 分录</text>
+  </g>
+  <rect x="314" y="310" width="198" height="108" rx="7" fill="#fffafa" stroke="#e8b4b4" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text x="326" y="332" font-size="12.5" font-weight="600" fill="#b91c1c">场次边界</text>
+  <text x="326" y="356" font-size="12" fill="#a13a3a">T+0 / T+1、开关场</text>
+  <text x="326" y="378" font-size="12" fill="#a13a3a">轧差失败怎么回滚</text>
+  <text x="326" y="400" font-size="12" fill="#a13a3a">关场补单、跨日切分</text>
+  <rect x="314" y="430" width="198" height="108" rx="7" fill="#fffafa" stroke="#e8b4b4" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text x="326" y="452" font-size="12.5" font-weight="600" fill="#b91c1c">账务一致性</text>
+  <text x="326" y="476" font-size="12" fill="#a13a3a">储值与会计同事务？</text>
+  <text x="326" y="498" font-size="12" fill="#a13a3a">借贷平衡谁校验</text>
+  <text x="326" y="520" font-size="12" fill="#a13a3a">不平怎么拦、怎么挂账</text>
+
+  <!-- ③ 外场 -->
+  <rect x="550" y="270" width="510" height="278" rx="10" fill="#fff8ee" stroke="#f2d6a8" stroke-width="1.2"/>
+  <text x="568" y="296" font-size="15" font-weight="600" fill="#a16207">③ 外场　逐笔出款，不能轧差</text>
+  <g>
+    <rect x="568" y="310" width="264" height="48" rx="7" fill="#ffffff" stroke="#f0d6a8"/>
+    <text x="582" y="329" font-size="13" font-weight="600" fill="#7c4a10">结算指令</text>
+    <text x="582" y="347" font-size="11.5" fill="#6b7684">逐笔保留，不做轧差</text>
+    <line x1="700" y1="358" x2="700" y2="368" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+
+    <rect x="568" y="370" width="264" height="48" rx="7" fill="#ffffff" stroke="#f0d6a8"/>
+    <text x="582" y="389" font-size="13" font-weight="600" fill="#7c4a10">渠道路由</text>
+    <text x="582" y="407" font-size="11.5" fill="#6b7684">成本 · 成功率 · 限额 · 窗口</text>
+    <line x1="700" y1="418" x2="700" y2="428" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+
+    <rect x="568" y="430" width="264" height="48" rx="7" fill="#ffffff" stroke="#f0d6a8"/>
+    <text x="582" y="449" font-size="13" font-weight="600" fill="#7c4a10">渠道订单</text>
+    <text x="582" y="467" font-size="11.5" fill="#6b7684">与渠道回盘一一对应</text>
+    <line x1="700" y1="478" x2="700" y2="488" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+
+    <rect x="568" y="490" width="264" height="48" rx="7" fill="#ffffff" stroke="#f0d6a8"/>
+    <text x="582" y="509" font-size="13" font-weight="600" fill="#7c4a10">外部渠道</text>
+    <text x="582" y="527" font-size="11.5" fill="#6b7684">清算流水 + 回盘结果</text>
+  </g>
+  <rect x="844" y="310" width="198" height="108" rx="7" fill="#fffafa" stroke="#e8b4b4" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text x="856" y="332" font-size="12.5" font-weight="600" fill="#b91c1c">渠道侧没画</text>
+  <text x="856" y="356" font-size="12" fill="#a13a3a">路由降级、回盘乱序</text>
+  <text x="856" y="378" font-size="12" fill="#a13a3a">T+1 渠道对账文件</text>
+  <text x="856" y="400" font-size="12" fill="#a13a3a">外场轧差丢逐笔维度</text>
+  <rect x="844" y="430" width="198" height="108" rx="7" fill="#fffafa" stroke="#e8b4b4" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text x="856" y="452" font-size="12.5" font-weight="600" fill="#b91c1c">反向流（回到支付领域）</text>
+  <text x="856" y="476" font-size="12" fill="#a13a3a">超时 / 查无此单 / 重推</text>
+  <text x="856" y="498" font-size="12" fill="#a13a3a">冲正、退款、重复回盘</text>
+  <text x="856" y="520" font-size="12" fill="#a13a3a">补偿几次、何时转人工</text>
+  <line x1="832" y1="514" x2="842" y2="514" stroke="#d98a8a" stroke-width="1.3" stroke-dasharray="3 3" marker-end="url(#pr)"/>
+
+  <!-- ④ 事后核算与对账 -->
+  <rect x="20" y="564" width="1040" height="256" rx="10" fill="#f8f6ff" stroke="#ddd6fe" stroke-width="1.2"/>
+  <text x="38" y="590" font-size="15" font-weight="600" fill="#6d28d9">④ 事后核算与对账　凭证、流水、余额三条路收口</text>
+
+  <text x="38" y="616" font-size="12.5" font-weight="600" fill="#6d28d9">a 会计核算</text>
+  <g>
+    <rect x="38" y="626" width="150" height="46" rx="7" fill="#ffffff" stroke="#ddd6fe"/>
+    <text x="50" y="645" font-size="12" font-weight="600" fill="#3b3355">凭证领域</text>
+    <text x="50" y="662" font-size="11.5" fill="#6b7684">交易 / 支付 / 渠道</text>
+    <line x1="190" y1="649" x2="204" y2="649" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+    <rect x="206" y="626" width="150" height="46" rx="7" fill="#ffffff" stroke="#ddd6fe"/>
+    <text x="218" y="654" font-size="12" font-weight="600" fill="#3b3355">试算平衡表</text>
+    <line x1="358" y1="649" x2="372" y2="649" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+    <rect x="374" y="626" width="150" height="46" rx="7" fill="#ffffff" stroke="#ddd6fe"/>
+    <text x="386" y="654" font-size="12" font-weight="600" fill="#3b3355">资产负债表</text>
+  </g>
+
+  <text x="38" y="702" font-size="12.5" font-weight="600" fill="#6d28d9">b 资金对账（余额调节）</text>
+  <rect x="38" y="712" width="330" height="48" rx="7" fill="#ffffff" stroke="#ddd6fe"/>
+  <text x="50" y="732" font-size="12" fill="#3b3355">系统银行账户余额 + 银收企未收</text>
+  <text x="50" y="750" font-size="12" fill="#6d28d9" font-weight="600">− 银付企未付 = 银行账户余额</text>
+  <line x1="370" y1="736" x2="384" y2="736" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+  <rect x="386" y="712" width="138" height="48" rx="7" fill="#ffffff" stroke="#ddd6fe"/>
+  <text x="398" y="740" font-size="12" font-weight="600" fill="#3b3355">余额调节表</text>
+  <text x="38" y="784" font-size="11.5" fill="#6b7684">余额调节表 → 资产负债表；式子只覆盖未达账项</text>
+  <text x="38" y="804" font-size="11.5" fill="#a13a3a">未画：调节表怎么回写、跨日切分归哪个场次</text>
+
+  <text x="568" y="616" font-size="12.5" font-weight="600" fill="#6d28d9">c 交易对账（逐笔）</text>
+  <g>
+    <rect x="568" y="626" width="224" height="46" rx="7" fill="#ffffff" stroke="#ddd6fe"/>
+    <text x="580" y="645" font-size="12" font-weight="600" fill="#3b3355">入账流水</text>
+    <text x="580" y="662" font-size="11.5" fill="#6b7684">← 储值系统 / 会计系统</text>
+    <rect x="814" y="626" width="224" height="46" rx="7" fill="#ffffff" stroke="#ddd6fe"/>
+    <text x="826" y="645" font-size="12" font-weight="600" fill="#3b3355">清算流水</text>
+    <text x="826" y="662" font-size="11.5" fill="#6b7684">← 外部渠道回盘</text>
+    <line x1="680" y1="672" x2="680" y2="690" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+    <line x1="926" y1="672" x2="926" y2="690" stroke="#8aa5bd" stroke-width="1.5" marker-end="url(#pa)"/>
+    <rect x="568" y="692" width="470" height="44" rx="7" fill="#ffffff" stroke="#ddd6fe"/>
+    <text x="803" y="719" font-size="12.5" font-weight="600" fill="#3b3355" text-anchor="middle">汇总确认（逐笔核）</text>
+    <line x1="803" y1="736" x2="803" y2="754" stroke="#d98a8a" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#pr)"/>
+    <rect x="568" y="756" width="470" height="50" rx="7" fill="#fffafa" stroke="#e8b4b4" stroke-width="1.2" stroke-dasharray="5 4"/>
+    <text x="580" y="776" font-size="12.5" font-weight="600" fill="#b91c1c">差错池（原图未画）</text>
+    <text x="580" y="796" font-size="11.5" fill="#a13a3a">长短款 / 重复入账 / 错账 / 手续费 / 跨日切分 → 挂账、冲正、人工介入</text>
+  </g>
+
+  <text x="24" y="840" font-size="12" fill="#6b7684">原图见上一张。实线是正向流，虚线框是补上的收口路径与未定义边界；红字对应正文「常见陷阱」，面试顺着问就往那里接。</text>
+</g>
+</svg>

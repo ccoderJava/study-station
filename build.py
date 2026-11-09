@@ -275,9 +275,21 @@ def inline(s):
     # 加粗用非贪婪匹配：允许 **…`len * 2 / 3`…** 这种正文里带单个 * 的写法
     s = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
     s = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<em>\1</em>", s)
-    s = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)", r'<img src="\2" alt="\1" loading="lazy">', s)
+    s = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)",
+               lambda m: '<img src="%s" alt="%s" loading="lazy">' % (img_url(m.group(2)), m.group(1)), s)
     s = re.sub(r"(?<!!)\[([^\]]+)\]\((https?://[^)]+)\)", r'<a href="\2" target="_blank" rel="noopener">\1</a>', s)
     return s
+
+
+def img_url(src):
+    """位图的 src 要指向构建产物 assets/img/。
+
+    md 里统一写 `img/xxx.png`（--check 也是按 theme/img/basename 找文件），
+    但页面根目录并没有 img/，拷好的图在 assets/img/。SVG 不走这里，它会被内联。
+    """
+    if src.lower().endswith(".svg"):
+        return src
+    return "assets/img/" + os.path.basename(src)
 
 
 def inline_svg(src):
@@ -469,8 +481,8 @@ def md_to_html(md, hid_prefix=None):
                     if svg:
                         out.append('<figure class="fig">%s%s</figure>' % (svg, cap))
                     else:
-                        out.append('<figure><img src="%s" alt="%s" loading="lazy">%s</figure>'
-                                   % (src, html.escape(alt), cap))
+                        out.append('<figure class="fig"><img src="%s" alt="%s" loading="lazy">%s</figure>'
+                                   % (img_url(src), html.escape(alt), cap))
                     continue
             text = ""
             for k, raw in enumerate(buf):
