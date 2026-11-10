@@ -19,6 +19,7 @@
 
 - 零第三方依赖是硬约束，不引入 npm/框架/CDN；`assets/` 是构建产物，只改 `theme/` 与 `content/`。
 - 改完内容必须 `python3 build.py --check && python3 build.py` 并提交产物。
+- 用 archify（`wrench-ai`）画图时，产出必须剥离 viewer 再落进 `theme/img/*.svg`：computed style 内联、去 class、切浅色主题、补浅底；不能直接把交互 HTML 放进站点。同页多张要给 `id` 加后缀，避免 `url(#grid)` 串图。细则在 `AGENTS.md` 画图节。
 
 ## 画图规则（2026-11-04 起，用户明确要求）
 

@@ -139,6 +139,7 @@ front-matter 字段与枚举的权威定义在 `FORMAT.md`，改字段先改那�
 - 插图天然支持点击放大：全屏灯箱 + 滚轮缩放 + 拖动平移 + Esc 关闭（`theme/app.js` 的 `initFigure`）。所以内联状态也要能看清整体结构，别指望用户点开才看懂。
 - `build.py --check` 会校验插图文件是否存在，引用不存在的图会直接失败。
 - 用户直接丢过来的截图 / 架构图（png）也存 `theme/img/`，按 `![图注](img/xxx.png)` 引用即可，不用硬转 svg。构建器会把位图的 src 指到 `assets/img/`，灯箱一样能放大。原图和按自己理解重画的 svg 可以同时插进同一篇，图注里说清哪张是原始素材。
+- 用 archify（`wrench-ai`）画图可以，但交付物只能是**剥离 viewer 的静态 SVG**。它默认产出带 186 KB CSS 和 4 段脚本的交互 HTML，塞进站点会污染全局样式、破坏零依赖。步骤：写 JSON 候选 → `validate --quality showcase --json`（9 项全绿）→ `deliver` → 无头 Chrome 打开产物、切 `data-theme="light"`、把 SVG 元素的 computed style 内联、删 class 和 `data-*`、补一块浅色底 → 存 `outerHTML` 到 `theme/img/*.svg`。同一页放两张时给第二张的 `id` 加后缀，否则 `url(#grid)` 会串图；viewer 的说明卡片不会进 SVG，信息要写进正文或图注。
 
 ### 代码块要带语言标识
 
@@ -171,7 +172,7 @@ public void foo() {}
 ## 当前进度与下一步
 
 ```
-知识点 33 个，覆盖 33（100%）｜卡片 48 篇｜场景题 20 道｜精读 2 篇｜模拟面试 1 场
+知识点 33 个，覆盖 33（100%）｜卡片 48 篇｜场景题 20 道｜精读 3 篇｜模拟面试 1 场
 ```
 
 覆盖率已满，且每个节点都有专题卡片。短板从「有没有写」转到「讲不讲得出来」：全部卡片 `status: draft`，`## 我的口述记录` 仍空白。
