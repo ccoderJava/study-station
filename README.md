@@ -1,4 +1,4 @@
-# Offer 斩杀（pay-review-station）
+# 知识工作台（pay-review-station）
 
 一个面向 **Java 后端 / 支付清结算方向** 面试复习的离线知识站。
 
@@ -36,7 +36,7 @@ pay-review-station/
 ├── FORMAT.md           内容格式规范 ← 写新内容前必读
 ├── index.html          构建产物，可直接打开
 ├── assets/             构建产物（data.js / app.js / style.css）
-└── dist/               打包产物（offer-zhan-sha.zip，不进版本库）
+└── dist/               打包产物（knowledge-workbench.zip，不进版本库）
 ```
 
 `index.html` 和 `assets/` 是产物，改它们没用，每次构建都会覆盖。
@@ -207,21 +207,21 @@ nodes: [D3, E5]
 站点零外部引用（无 CDN、无网络字体、无图片、无运行时请求），打包后拷过去就能用。
 
 ```bash
-make pack          # = build + 打包，产物在 dist/offer-zhan-sha.zip
+make pack          # = build + 打包，产物在 dist/knowledge-workbench.zip
 ```
 
-压缩包约 **385 KB / 112 个文件**，是全量包：页面、内容源文件、构建脚本都在里面。内网既能直接看，装了 Python 也能继续写卡片。
+压缩包当前约 **7 MB / 228 个文件**（插图多，压缩率低，会随内容增长），是全量包：页面、内容源文件、构建脚本都在里面。内网既能直接看，装了 Python 也能继续写卡片。
 
 ### 内网怎么打开
 
-解压 → 双击 `offer-zhan-sha/index.html`。**用 Chrome 或 Edge**，不需要任何服务、不需要解压到特定目录。
+解压 → 双击 `knowledge-workbench/index.html`。**用 Chrome 或 Edge**，不需要任何服务、不需要解压到特定目录。
 
 实测过 `file://` 下的行为：内容正常渲染、localStorage 可写、刷新不丢。**不支持 IE11**（用了 `Element.closest()` 和 `Set`）。
 
 如果内网要多人访问、或多个标签页共享同一份进度，再起个静态服务：
 
 ```bash
-cd offer-zhan-sha
+cd knowledge-workbench
 python3 -m http.server 8080      # 然后访问 http://<内网IP>:8080
 ```
 

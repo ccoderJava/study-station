@@ -4,7 +4,7 @@
 
 ## 项目是什么
 
-**Offer 斩杀**——8 年 Java 后端、支付结算方向的面试作战台。
+**知识工作台**——8 年 Java 后端、支付结算方向的面试作战台。
 
 内容 = markdown，构建 = Python 标准库脚本，产物 = 离线可用的单页站点。
 目标是「面试作战台」，不是笔记站：最终要能回答四个问题——缺什么、学到哪、掌握了吗、下一步做什么。
@@ -25,7 +25,7 @@ python3 build.py --check   # 只校验：必填字段、nodes 引用存在性、
 python3 build.py --tone    # 只列语气欠账（哪篇 / 哪条规则 / 哪句话）
 python3 build.py --tone-baseline  # 清完一批语气问题后收紧基线
 make build / make check / make tone / make serve
-make pack                  # 构建 + 打包成 dist/offer-zhan-sha.zip（拷进内网用）
+make pack                  # 构建 + 打包成 dist/knowledge-workbench.zip（拷进内网用）
 ```
 
 构建器只用 `re/json/os/html/sys/datetime`。markdown 解析是自写的子集，支持标题、列表、表格、引用、代码块、行内样式——够用即可，不要为了兼容完整 CommonMark 引入解析库。

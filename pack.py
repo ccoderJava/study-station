@@ -2,7 +2,7 @@
 """把站点打包成一个可以拷进内网的 zip。
 
 用法：
-    python3 pack.py           # 打包到 dist/offer-zhan-sha.zip
+    python3 pack.py           # 打包到 dist/knowledge-workbench.zip
     python3 pack.py --date    # 文件名带日期，便于留多个版本
 
 打包内容为全量（页面 + 内容源文件 + 构建脚本），内网既能直接阅读，
@@ -16,7 +16,7 @@ import sys
 import time
 import zipfile
 
-ROOT_NAME = "offer-zhan-sha"
+ROOT_NAME = "knowledge-workbench"
 OUT_DIR = "dist"
 SKIP_DIRS = {".git", ".workbuddy", "__pycache__", ".idea", ".vscode", "dist"}
 SKIP_FILES = {".DS_Store"}
