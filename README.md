@@ -4,6 +4,8 @@
 
 内容全部是可版本管理的 markdown，构建成**零第三方依赖**的单页站点：双击 `index.html` 即可使用，可整体拷进内网。
 
+**线上地址**：https://ccoder.cc/study-station/ （GitHub Pages，push 到 `main` 自动部署；`https://ccoderJava.github.io/study-station/` 会跳转到该域名）
+
 ---
 
 ## 快速开始
