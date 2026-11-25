@@ -1200,6 +1200,13 @@
       h += '</div>';
     }
 
+    var reps = (n.repos || []).map(function (i) { return itemById[i]; }).filter(Boolean);
+    if (reps.length) {
+      h += '<div class="sec"><h2>相关仓库 <em>' + reps.length + ' 个</em></h2>';
+      reps.forEach(function (it) { h += rowItem(it); });
+      h += '</div>';
+    }
+
     if (n.html && n.html.indexOf('待补充') === -1) {
       h += '<div class="sec"><h2>节点说明</h2><div class="reader">' + n.html + '</div></div>';
     }
