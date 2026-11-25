@@ -1,0 +1,53 @@
+name: 部署知识工作台到 Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+      - name: 准备 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 校验并构建
+        run: |
+          python3 build.py --check
+          python3 build.py
+      - name: 准备发布目录
+        run: |
+          mkdir -p _site
+          cp -R index.html assets _site/
+          touch _site/.nojekyll
+          echo "发布文件：" && find _site -type f | wc -l
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+      - name: 上传站点产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 部署到 Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
