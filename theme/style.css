@@ -631,3 +631,7 @@ a.cardref{
   color:var(--acc);text-decoration:none;border-bottom:0;
 }
 a.cardref:hover{color:#123a86}
+
+/* 仓库收藏：靛蓝区别于卡片(绿)、场景题(橙)、精读(紫)、面试(青) */
+.pill.rp{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+.rdcard.rp:hover{border-color:#bfdbfe;background:#f8fbff}

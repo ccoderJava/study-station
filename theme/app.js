@@ -80,8 +80,10 @@
   function evRank(it) { var i = EV_ORDER.indexOf(it.event); return i === -1 ? 99 : i; }
   function isRead(it) { return it.kind === 'read'; }
   function isInterview(it) { return it.kind === 'interview'; }
-  /* 进侧栏、复习队列和「已能讲」的只有卡片与场景题；精读和面试记录是输入与记录 */
-  function isLearnable(it) { return !isRead(it) && !isInterview(it); }
+  function isRepo(it) { return it.kind === 'repo'; }
+  /* 进侧栏、复习队列和「已能讲」的只有卡片与场景题；精读、面试、仓库是输入与记录 */
+  function isLearnable(it) { return !isRead(it) && !isInterview(it) && !isRepo(it); }
+  function repoDate(it) { return (it.repo && it.repo.pushed) || it.updated || it.created || ''; }
   function readDate(it) {
     return (it.src && (it.src.read || it.src.date)) || it.updated || it.created || '';
   }
@@ -337,10 +339,11 @@
       var cid = decodeURIComponent(p[1]);
       var cur = itemById[cid];
       viewCard(cid);
-      setTabs(cur && isRead(cur) ? 'reads' : (cur && isInterview(cur) ? 'interviews' : 'cards'));
+      setTabs(cur && isRead(cur) ? 'reads' : (cur && isInterview(cur) ? 'interviews' : isRepo(cur) ? 'repos' : 'cards'));
     }
     else if (head === 'reads') { viewReads(); setTabs('reads'); }
     else if (head === 'interviews') { viewInterviews(); setTabs('interviews'); }
+    else if (head === 'repos') { viewRepos(); setTabs('repos'); }
     else if (head === 'node' && p[1]) { viewNode(p[1]); setTabs('roadmap'); }
     else if (head === 'roadmap') { viewRoadmap(); setTabs('roadmap'); }
     else if (head === 'graph') { viewGraph(); setTabs('graph'); }
@@ -437,6 +440,16 @@
       h += '<div class="sec"><h2>最近模拟面试 <em>回答逐字归档，复盘只写缺口</em></h2>';
       recentIv.forEach(function (it) { h += rowItem(it); });
       h += '<div class="morebar"><a class="btn" href="#/interviews">看全部面试记录</a></div></div>';
+    }
+
+    var recentRepos = items.filter(isRepo).sort(function (a, b) {
+      if (repoDate(a) !== repoDate(b)) return repoDate(a) < repoDate(b) ? 1 : -1;
+      return a.id < b.id ? 1 : (a.id > b.id ? -1 : 0);
+    }).slice(0, 3);
+    if (recentRepos.length) {
+      h += '<div class="sec"><h2>最近收藏 <em>开源仓库的拆解与判断</em></h2>';
+      recentRepos.forEach(function (it) { h += rowItem(it); });
+      h += '<div class="morebar"><a class="btn" href="#/repos">看全部仓库</a></div></div>';
     }
 
     var next = items.filter(function (i) { return isLearnable(i) && stOf(i.id) === 'todo'; })
@@ -1200,12 +1213,15 @@
     var st = stOf(it.id);
     var rd = isRead(it);
     var iv = isInterview(it);
+    var rp = isRepo(it);
     var badge = it.kind === 'scenario' ? '<span class="pill sc">场景</span>'
       : rd ? '<span class="pill rd">精读</span>'
-      : iv ? '<span class="pill iv">面试</span>' : '';
+      : iv ? '<span class="pill iv">面试</span>'
+      : rp ? '<span class="pill rp">仓库</span>' : '';
     var stTxt = rd ? ((it.src && it.src.site) || '')
       : iv ? ((it.itv && it.itv.date || '') +
               (it.itv && it.itv.score !== '' && it.itv.score != null ? ' · ' + it.itv.score + '/3' : ''))
+      : rp ? ((it.repo && it.repo.repo) || '')
       : st === 'solid' ? '已能讲' : st === 'learning' ? '学习中' : '';
     return '<a class="rowitem" href="#/card/' + it.id + '"><div class="ri-main">' +
       '<div class="ri-t">' + badge + (badge ? ' ' : '') + esc(it.title) + '</div>' +
@@ -1243,6 +1259,9 @@
         esc((it.src && it.src.site) || '外部文章') + '</div>';
     } else if (isInterview(it)) {
       h += '<div class="crumb"><a href="#/interviews">模拟面试</a> / ' + esc(it.direction) + '</div>';
+    } else if (isRepo(it)) {
+      h += '<div class="crumb"><a href="#/repos">仓库收藏</a> / ' +
+        esc((it.repo && (it.repo.author || it.repo.repo)) || 'GitHub') + '</div>';
     } else {
       h += '<div class="crumb"><a href="#/cards">全部内容</a> / ' + esc(it.direction) +
         ' / <a href="#/node/' + it.primary + '">' + esc((nodeById[it.primary] || {}).name || it.primary) + '</a></div>';
@@ -1274,6 +1293,25 @@
         ((v.gaps || []).length ? '<span class="sp">·</span><span class="due">' + v.gaps.length + ' 个薄弱点</span>' : '') +
         (v.focus ? '<span class="sp">·</span><span>' + esc(v.focus) + '</span>' : '') +
         '</div>';
+    } else if (isRepo(it)) {
+      var r = it.repo || {};
+      h += '<div class="meta"><span class="pill rp">仓库收藏</span>' +
+        (r.repo ? '<span>' + esc(r.repo) + '</span>' : '') +
+        (r.language ? '<span class="sp">·</span><span>' + esc(r.language) + '</span>' : '') +
+        (r.stars !== '' && r.stars != null ? '<span class="sp">·</span><span>' + esc(String(r.stars)) + ' star</span>' : '') +
+        (r.forks !== '' && r.forks != null ? '<span class="sp">·</span><span>' + esc(String(r.forks)) + ' fork</span>' : '') +
+        (r.stars_on ? '<span class="sp">·</span><span>' + esc(r.stars_on) + ' 抓取</span>' : '') +
+        (r.license ? '<span class="sp">·</span><span>' + esc(r.license) + '</span>' : '') +
+        '</div>';
+      if (r.url) {
+        h += '<div class="srcbox"><span class="sb-k">仓库</span>' +
+          '<a href="' + esc(r.url) + '" target="_blank" rel="noopener">' +
+          esc(String(r.url).replace(/^https?:\/\//, '')) + '</a>' +
+          (r.homepage ? '<span class="sb-k">文档</span><a href="' + esc(r.homepage) +
+            '" target="_blank" rel="noopener">' +
+            esc(String(r.homepage).replace(/^https?:\/\//, '')) + '</a>' : '') +
+          '<span class="sb-tip">链接是外部的，内网打不开；笔记本身离线可读</span></div>';
+      }
     } else {
       h += '<div class="meta">' +
         (it.kind === 'scenario' ? '<span class="pill sc">场景题</span>' : '<span class="pill kp">知识点</span>') +
@@ -1599,6 +1637,43 @@
     view.scrollTop = 0;
   }
 
+  /* ------------------------------------------------------------ 仓库收藏 */
+  function viewRepos() {
+    var rs = items.filter(isRepo).sort(function (a, b) {
+      if (repoDate(a) !== repoDate(b)) return repoDate(a) < repoDate(b) ? 1 : -1;
+      return a.id < b.id ? 1 : (a.id > b.id ? -1 : 0);
+    });
+    var h = '<div class="hd"><h1>仓库收藏</h1><p>' + rs.length +
+      ' 个值得回看的 git 仓库：先讲清它解决什么，再看代码怎么组织，最后写我的判断和限制。</p></div>';
+    if (!rs.length) {
+      h += '<div class="emptyhit">还没有收藏仓库。给我一个 GitHub 链接，按六段整理：' +
+        '摘要 / 做什么 / 怎么用 / 设计上值得看的 / 我的判断 / 落到我这里。</div>';
+    } else {
+      h += '<div class="readlist">';
+      rs.forEach(function (it) {
+        var r = it.repo || {};
+        var kw = [];
+        if (r.language) kw.push(r.language);
+        if (r.license) kw.push(r.license);
+        if (r.stars !== '' && r.stars != null) kw.push(r.stars + ' star');
+        it.nodes.forEach(function (nid) { kw.push((nodeById[nid] || {}).name || nid); });
+        h += '<a class="rdcard rp" href="#/card/' + it.id + '">' +
+          '<div class="rd-meta"><span class="pill rp">仓库</span>' +
+          (r.repo ? '<span>' + esc(r.repo) + '</span>' : '') +
+          (r.pushed ? '<span class="sp">·</span><span>更新 ' + esc(r.pushed) + '</span>' : '') +
+          '</div><div class="rd-t">' + esc(it.title) + '</div>' +
+          '<div class="rd-d">' + esc(it.excerpt || '') + '</div>' +
+          (kw.length ? '<div class="rd-kw">' + kw.map(function (k) {
+            return '<span class="rdkw">' + esc(k) + '</span>';
+          }).join('') + '</div>' : '') + '</a>';
+      });
+      h += '</div>';
+    }
+    view.className = '';
+    view.innerHTML = h;
+    view.scrollTop = 0;
+  }
+
   /* ------------------------------------------------------------ 搜索 */
   function doSearch(kw) {
     kw = (kw || '').trim().toLowerCase();
@@ -1616,9 +1691,11 @@
         (it.itv ? ' ' + (it.itv.focus || '') + ' ' + (it.itv.gaps || []).join(' ') + ' ' +
           /* gaps 存的是节点 id，查漏时用户更常按中文名搜，两边都进索引 */
           (it.itv.gaps || []).map(function (g) { return (nodeById[g] || {}).name || ''; }).join(' ') : '') +
+        (it.repo ? ' ' + (it.repo.repo || '') + ' ' + (it.repo.author || '') + ' ' +
+          (it.repo.language || '') + ' ' + (it.repo.license || '') : '') +
         ' ' + it.excerpt).toLowerCase();
       if (hay.indexOf(kw) > -1) {
-        res.push({ href: '#/card/' + it.id, t: it.title, m: (it.kind === 'scenario' ? '场景题' : isRead(it) ? '精读' : isInterview(it) ? '面试' : '卡片') + ' · ' + it.direction + ' · ' + it.nodes.join(' ') });
+        res.push({ href: '#/card/' + it.id, t: it.title, m: (it.kind === 'scenario' ? '场景题' : isRead(it) ? '精读' : isInterview(it) ? '面试' : isRepo(it) ? '仓库' : '卡片') + ' · ' + it.direction + ' · ' + it.nodes.join(' ') });
       }
     });
     if (!res.length) {

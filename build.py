@@ -40,6 +40,11 @@ INTERVIEW_MIN, INTERVIEW_MAX = 50, 240
 INTERVIEW_SECTIONS = ["## 本场结论", "## 逐题复盘", "## 暴露的缺口",
                       "## 下次要补的", "## 我的口述记录"]
 
+# 仓库收藏：有价值的 git 仓库也拆成卡片；摘要比精读更短，不进复习队列
+REPO_MIN, REPO_MAX = 80, 200
+REPO_SECTIONS = ["## 30 秒摘要", "## 它做什么", "## 怎么用",
+                 "## 设计上值得看的", "## 我的判断", "## 落到我这里"]
+
 
 def han_count(text):
     """只统计汉字数，与页面上念出来的字数一致。"""
@@ -618,10 +623,11 @@ def build_data():
     scenarios = load_dir("scenarios")
     reads = load_dir("reads")
     interviews = load_dir("interviews")
+    repos = load_dir("repos")
 
     layers.sort(key=lambda x: int(x.get("order", 99)))
     nodes.sort(key=lambda x: x.get("id", ""))
-    items = cards + scenarios + reads + interviews
+    items = cards + scenarios + reads + interviews + repos
 
     problems = []
 
@@ -656,6 +662,13 @@ def build_data():
                 C["gaps"] = [x.strip() for x in C["gaps"].split(",") if x.strip()]
             if not isinstance(C.get("gaps"), list):
                 C["gaps"] = []
+        elif C["_file"].startswith("repos/"):
+            # 仓库收藏：url 是入口；节点可空，读过再归类
+            if C.get("kind") != "repo":
+                problems.append("仓库收藏的 kind 必须是 repo: %s" % C["_file"])
+            need(C, ["url"], "repo:%s" % C["_file"])
+            if C.get("url") and not str(C["url"]).startswith(("http://", "https://")):
+                problems.append("仓库收藏的 url 必须是 http(s) 链接: %s" % C["_file"])
         elif not C["nodes"]:
             problems.append("item:%s 缺少字段 nodes" % C["_file"])
 
@@ -710,6 +723,21 @@ def build_data():
             if miss:
                 problems.append("精读骨架缺段：%s 少了 %s" % (C["_file"], "、".join(miss)))
             continue
+        if C.get("kind") == "repo":
+            sec = brief_section(C["_body"], "## 30 秒摘要")
+            if sec is None:
+                problems.append("30 秒摘要缺失：%s 没有「## 30 秒摘要」段" % C["_file"])
+            else:
+                n = han_count(sec)
+                C["_brief"] = n
+                if not REPO_MIN <= n <= REPO_MAX:
+                    problems.append("30 秒摘要不达标：%s 实际 %d 个汉字（要求 %d~%d）"
+                                    % (C["_file"], n, REPO_MIN, REPO_MAX))
+            have = sections_of(C["_body"])
+            miss = [s for s in REPO_SECTIONS if s not in have]
+            if miss:
+                problems.append("仓库骨架缺段：%s 少了 %s" % (C["_file"], "、".join(miss)))
+            continue
         sec = brief_section(C["_body"])
         if sec is None:
             problems.append("30 秒简述缺失：%s 没有「## 30 秒简述」段" % C["_file"])
@@ -744,6 +772,7 @@ def build_data():
         # 面试里被标成薄弱点的节点，即使题目没挂它，也算相关面试
         N["interviews"] = [c["id"] for c in interviews
                            if N["id"] in c["nodes"] or N["id"] in c.get("gaps", [])]
+        N["repos"] = [c["id"] for c in repos if N["id"] in c["nodes"]]
 
     # 插图必须真实存在：md 里写了 ![图注](img/x.svg) 但文件不在，页面会静默少一张图
     for obj in items + nodes:
@@ -777,7 +806,7 @@ def build_data():
                    "keywords": n.get("keywords", []), "html": n["_html"],
                    "excerpt": n["_excerpt"], "cards": n["cards"],
                    "scenarios": n["scenarios"], "reads": n["reads"],
-                   "interviews": n["interviews"]} for n in nodes],
+                   "interviews": n["interviews"], "repos": n["repos"]} for n in nodes],
         "items": [{"id": c["id"], "kind": c["kind"], "title": c["title"],
                    "graph": c.get("graph", ""),
                    "nodes": c["nodes"], "primary": c.get("primary", c["nodes"][0] if c["nodes"] else ""),
@@ -792,6 +821,12 @@ def build_data():
                             "gaps": c.get("gaps", []), "qcount": c.get("_qcount", 0),
                             "duration": c.get("duration", ""),
                             "focus": c.get("focus", "")} if c.get("kind") == "interview" else None),
+                   "repo": ({"repo": c.get("repo", ""), "url": c.get("url", ""),
+                             "homepage": c.get("homepage", ""), "author": c.get("author", ""),
+                             "language": c.get("language", ""), "license": c.get("license", ""),
+                             "stars": c.get("stars", ""), "forks": c.get("forks", ""),
+                             "pushed": c.get("pushed", ""),
+                             "stars_on": c.get("stars_on", "")} if c.get("kind") == "repo" else None),
                    "toc": c["_toc"], "excerpt": c["_excerpt"]} for c in items],
     }
     return data, problems, (tone_files, tone_hits)
@@ -908,10 +943,11 @@ def main():
     n_sc = len([c for c in data["items"] if c["kind"] == "scenario"])
     n_read = len([c for c in data["items"] if c["kind"] == "read"])
     n_itv = len([c for c in data["items"] if c["kind"] == "interview"])
+    n_repo = len([c for c in data["items"] if c["kind"] == "repo"])
     print("构建完成")
     print("  知识点 %d 个（已覆盖 %d，%.0f%%）" % (n_nodes, cov, cov * 100.0 / max(n_nodes, 1)))
-    print("  卡片 %d 篇，场景题 %d 道，精读 %d 篇，模拟面试 %d 场"
-          % (n_cards, n_sc, n_read, n_itv))
+    print("  卡片 %d 篇，场景题 %d 道，精读 %d 篇，模拟面试 %d 场，仓库收藏 %d 个"
+          % (n_cards, n_sc, n_read, n_itv, n_repo))
     print("  数据 %.0f KB → assets/data.js" % (size / 1024.0))
     print("  入口 %s" % os.path.join(DIST, "index.html"))
     return 0

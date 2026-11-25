@@ -15,7 +15,8 @@ pay-review-station/
 │   ├── cards/        A3-01-xxx.md       知识卡片（一个知识点一篇）
 │   ├── scenarios/    S01-xxx.md         场景题（一道题串多个知识点）
 │   ├── reads/        R01-xxx.md         精读笔记（外部文章的拆解与判断）
-│   └── interviews/   I01-xxx.md         模拟面试记录（回答逐字归档 + 复盘）
+│   ├── interviews/   I01-xxx.md         模拟面试记录（回答逐字归档 + 复盘）
+│   └── repos/        G01-xxx.md         仓库收藏（git 仓库的拆解与判断）
 ├── theme/            index.html / app.js / style.css   站点模板
 ├── build.py          构建器（零依赖，Python 标准库）
 ├── index.html        ← 构建产物，双击即用
@@ -26,7 +27,7 @@ pay-review-station/
 
 ---
 
-## 2. 六种文件的 front-matter
+## 2. 七种文件的 front-matter
 
 所有文件都以 `---` 包裹的元数据开头，正文从第二个 `---` 之后开始。
 
@@ -192,6 +193,43 @@ updated: 2026-11-05
 | direction / status | 否 | 与卡片同义，`status` 一般 `done` |
 
 答得好的节点不要写进 `gaps`。它只记缺口，写满就没有筛子的作用了。面试记录不进侧栏、全部内容、复习队列和「已能讲」统计。
+
+### 2.7 仓库收藏 `content/repos/G01-xxx.md`
+
+```yaml
+---
+id: G01
+title: "videodl：纯 Python 的多平台视频下载器"
+kind: repo
+repo: "CharlesPikachu/videodl"
+url: "https://github.com/CharlesPikachu/videodl"
+homepage: "https://videofetch.readthedocs.io/"
+author: "CharlesPikachu"
+language: "Python"
+license: "PolyForm-Noncommercial-1.0.0"
+stars: "3312"
+forks: 537
+pushed: 2026-11-25
+stars_on: 2026-11-25
+nodes: [F1]
+direction: "工具与开源"
+created: 2026-11-25
+updated: 2026-11-25
+---
+```
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| id | 是 | `G01` 起递增，URL 是 `#/card/G01` |
+| kind / url | 是 | 固定 `repo`；仓库主页必须是 http(s) 链接 |
+| repo / author | 否 | `owner/name` 与作者，列表和详情页显示 |
+| language / license | 否 | 主语言、许可证。非商用许可必须写出来，别让人误以为能直接抄进项目 |
+| stars / forks | 否 | 抓取时的数字；`stars_on` 记抓取日期，不能让旧数字冒充实时值 |
+| pushed | 否 | 仓库最近推送日期，列表按它倒序 |
+| homepage | 否 | 项目文档站，没有就留空 |
+| nodes | 否（可空） | 能借鉴到哪个知识点，节点页据此列「相关仓库」。读不准就先空着 |
+
+仓库卡片不进侧栏、复习队列和「已能讲」统计。外链只是索引，内网打不开；笔记本身离线可读。
 
 ---
 
@@ -470,3 +508,28 @@ python3 build.py --check           # 日常校验，顺带打印剩余欠账数
 **查漏补缺怎么发生**：`gaps` 跨场次累计 → `#/interviews` 顶部和总览页按被点名次数排序 → 点开直接跳对应卡片或节点。同一节点被点名两次以上，说明光读卡片没用，得找人讲一遍。节点页也会列出「相关面试」。
 
 归档完一场，同步更新 `AGENTS.md` 的统计行。
+
+---
+
+## 10. 仓库收藏怎么写（一个 git 仓库一张卡片）
+
+用户给一个 GitHub 链接，意思是要收藏这个仓库并写成卡片。先抓 README 和仓库元数据（star / fork / 语言 / 许可证 / 最近推送），数字标抓取日期，不冒充实时值。
+
+**骨架六段，标题一字不改**
+
+| 段 | 写什么 | 校验 |
+|---|---|---|
+| `## 30 秒摘要` | 解决什么问题、值得看什么、我采不采 | 80~200 汉字 |
+| `## 它做什么` | 客观复述：模块划分、数据流、覆盖范围、关键对象 | 不掺评价；数字能对上 README |
+| `## 怎么用` | 安装命令、CLI / API 示例、配置项 | 命令与代码带语言标识 |
+| `## 设计上值得看的` | 抽象边界、降级顺序、可维护性做法，同时写代价 | 至少一条具体做法，不许泛泛夸 |
+| `## 我的判断` | 认同什么、存疑什么、边界在哪 | 必须有一条存疑，尤其许可证限制 |
+| `## 落到我这里` | 对应哪几张站内卡片、面试怎么讲、他的项目经历怎么类比 | 至少点一张站内卡片 |
+
+约定：
+
+- 落 `content/repos/G编号-短标题.md`，路由 `#/card/G编号`。
+- **先看许可证。** PolyForm、CC-BY-NC 这类非商用许可必须写进 front-matter 和判断段，别让人以为代码能直接搬进公司项目。
+- 外链是索引，不是依赖。站点保持离线可读，内网打不开 GitHub 不影响笔记本身。
+- 仓库卡片跟精读、面试记录一样不进侧栏、复习队列和「已能讲」统计，也不加掌握度按钮。
+- 节点能挂就挂（`nodes`），挂不准可以留空；节点页据此列「相关仓库」。
