@@ -4,7 +4,7 @@
 
 内容全部是可版本管理的 markdown，构建成**零第三方依赖**的单页站点：双击 `index.html` 即可使用，可整体拷进内网。
 
-**线上地址**：https://ccoder.cc/study-station/ （GitHub Pages，push 到 `main` 自动部署；`https://ccoderJava.github.io/study-station/` 会跳转到该域名）
+**线上地址**：https://study-station.ccoder.cc/ （GitHub Pages 自定义域名；push 到 `main` 自动部署。DNS 由阿里云解析，`study-station` 主机记录 CNAME 指向 `ccoderJava.github.io`，仓库根 `CNAME` 文件与发布目录里各有一份）
 
 ---
 
